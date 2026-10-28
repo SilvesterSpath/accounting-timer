@@ -53,3 +53,8 @@ jobs:
         env:
           DATABASE_URL: postgresql://accounting:accounting@127.0.0.1:5432/accounting_timer
         run: pnpm test
+
+      - name: Phase 0 verification
+        env:
+          DATABASE_URL: postgresql://accounting:accounting@127.0.0.1:5432/accounting_timer
+        run: pnpm verify:phase0

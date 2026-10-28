@@ -15,4 +15,3 @@ apps/web/dist/
 apps/api/dist/
 packages/*/dist/
 .turbo/
-docs/
