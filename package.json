@@ -1,0 +1,29 @@
+{
+  "name": "accounting-timer",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Accounting Workload & Profitability Management System — Gate A practice prototype",
+  "engines": {
+    "node": ">=24 <25",
+    "pnpm": ">=10"
+  },
+  "packageManager": "pnpm@10.15.0",
+  "scripts": {
+    "dev": "pnpm run --parallel --filter @accounting-timer/api --filter @accounting-timer/web dev",
+    "dev:api": "pnpm --filter @accounting-timer/api dev",
+    "dev:web": "pnpm --filter @accounting-timer/web dev",
+    "dev:desktop": "pnpm --filter @accounting-timer/desktop dev",
+    "build": "pnpm -r run build",
+    "typecheck": "pnpm -r run typecheck",
+    "test": "pnpm -r run test",
+    "lint": "pnpm -r run lint",
+    "check:node": "node scripts/check-node.mjs",
+    "db:up": "docker compose up -d",
+    "db:down": "docker compose down",
+    "db:ps": "docker compose ps",
+    "verify:phase0": "node scripts/verify-phase0.mjs"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["esbuild", "electron"]
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "name": "@accounting-timer/desktop",
+  "version": "0.0.0",
+  "private": true,
+  "main": "dist/main.js",
+  "scripts": {
+    "dev": "tsc -p tsconfig.json && electron .",
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node --import tsx --test src/**/*.test.ts",
+    "lint": "node -e \"console.log('lint: desktop ok (Phase 0 stub)')\""
+  },
+  "devDependencies": {
+    "@types/node": "^24.5.2",
+    "electron": "^38.1.2",
+    "tsx": "^4.20.5",
+    "typescript": "^5.9.2"
+  }
+}

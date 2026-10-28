@@ -1,0 +1,26 @@
+{
+  "name": "@accounting-timer/api",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node --import tsx --test src/**/*.test.ts",
+    "lint": "node -e \"console.log('lint: api ok (Phase 0 stub)')\""
+  },
+  "dependencies": {
+    "@accounting-timer/shared-types": "workspace:*",
+    "dotenv": "^17.2.2",
+    "fastify": "^5.6.0",
+    "pg": "^8.16.3"
+  },
+  "devDependencies": {
+    "@types/node": "^24.5.2",
+    "@types/pg": "^8.15.5",
+    "tsx": "^4.20.5",
+    "typescript": "^5.9.2"
+  }
+}

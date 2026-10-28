@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  phase0:
+    name: Phase 0 checks (Node 24)
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: accounting
+          POSTGRES_PASSWORD: accounting
+          POSTGRES_DB: accounting_timer
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U accounting -d accounting_timer"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.15.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: "pnpm"
+
+      - name: Enforce Node 24
+        run: node scripts/check-node.mjs
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Build shared types
+        run: pnpm --filter @accounting-timer/shared-types build
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Test
+        env:
+          DATABASE_URL: postgresql://accounting:accounting@127.0.0.1:5432/accounting_timer
+        run: pnpm test
