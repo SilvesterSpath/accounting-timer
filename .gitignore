@@ -11,6 +11,7 @@ Thumbs.db
 *.tsbuildinfo
 .vite/
 apps/desktop/release/
+apps/desktop/dist/
 apps/web/dist/
 apps/api/dist/
 packages/*/dist/

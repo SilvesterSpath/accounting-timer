@@ -5,12 +5,14 @@ import { checkDatabase } from "./db.js";
 
 export async function buildApp() {
   const app = Fastify({ logger: true });
+  const allowed = new Set(config.corsOrigins);
 
   app.addHook("onRequest", async (request, reply) => {
     const origin = request.headers.origin;
-    if (origin === config.corsOrigin) {
+    if (origin && allowed.has(origin)) {
       reply.header("Access-Control-Allow-Origin", origin);
       reply.header("Access-Control-Allow-Credentials", "true");
+      reply.header("Vary", "Origin");
       reply.header(
         "Access-Control-Allow-Headers",
         "Authorization, Content-Type",

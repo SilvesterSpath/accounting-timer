@@ -1,0 +1,21 @@
+appId: com.accountingtimer.desktop
+productName: AccountingTimerPoC
+copyright: Copyright © Accounting Timer PoC
+directories:
+  output: release
+  buildResources: build
+files:
+  - dist/**/*
+  - package.json
+extraResources:
+  - from: ../web/dist
+    to: web
+  - from: resources/config.json
+    to: config.json
+asar: true
+win:
+  target:
+    - target: dir
+      arch:
+        - x64
+forceCodeSigning: false

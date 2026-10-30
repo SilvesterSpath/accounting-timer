@@ -14,7 +14,8 @@
   "dependencies": {
     "@accounting-timer/shared-types": "workspace:*",
     "react": "^19.1.1",
-    "react-dom": "^19.1.1"
+    "react-dom": "^19.1.1",
+    "react-router-dom": "^7.18.5"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.1.13",

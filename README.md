@@ -4,6 +4,7 @@ Gate A **practice prototype** (fictional data). See:
 
 - [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md) — full plan
 - [docs/ASSUMPTIONS.md](docs/ASSUMPTIONS.md) — Phase 0 prototype assumptions
+- [docs/ELECTRON_POC.md](docs/ELECTRON_POC.md) — Phase 0.5 Electron feasibility (`experiment/electron-poc`)
 
 ## Prerequisites
 
@@ -34,8 +35,25 @@ pnpm dev                 # API + web in parallel
 - Web: http://127.0.0.1:5173 (proxies `/api` → API)
 - API health: http://127.0.0.1:3001/api/v1/health
 
-Desktop empty shell (optional): `pnpm dev:web` then `pnpm dev:desktop`.
+## Electron PoC (Phase 0.5)
+
+```bash
+pnpm db:up
+pnpm dev:api
+pnpm package:desktop
+pnpm verify:electron-poc
+pnpm --filter @accounting-timer/desktop start:packaged
+```
+
+Optional Electron against Vite (dev only):
+
+```bash
+pnpm dev:web
+# other terminal:
+# set ELECTRON_START_URL=http://127.0.0.1:5173
+pnpm dev:desktop
+```
 
 ## Scope note
 
-Phase 0 is scaffold only. Do not load real employee/client data. Phase 1+ requires separate approval.
+Phase 0 / 0.5 are scaffold + delivery-shell proof only. Do not load real employee/client data. Phase 1+ requires separate approval.

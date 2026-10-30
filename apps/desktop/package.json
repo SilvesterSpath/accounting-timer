@@ -1,18 +1,23 @@
 {
   "name": "@accounting-timer/desktop",
-  "version": "0.0.0",
+  "version": "0.0.5",
   "private": true,
+  "description": "Accounting Timer Electron PoC shell",
+  "author": "Accounting Timer",
   "main": "dist/main.js",
   "scripts": {
     "dev": "tsc -p tsconfig.json && electron .",
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "node --import tsx --test src/**/*.test.ts",
-    "lint": "node -e \"console.log('lint: desktop ok (Phase 0 stub)')\""
+    "lint": "node -e \"console.log('lint: desktop ok (Phase 0.5)')\"",
+    "package": "pnpm run build && electron-builder --config electron-builder.yml --win dir",
+    "start:packaged": "node ../../scripts/start-packaged-desktop.mjs"
   },
   "devDependencies": {
     "@types/node": "^24.5.2",
     "electron": "^38.1.2",
+    "electron-builder": "^26.0.12",
     "tsx": "^4.20.5",
     "typescript": "^5.9.2"
   }
