@@ -42,17 +42,22 @@ pnpm db:up
 pnpm dev:api
 pnpm package:desktop
 pnpm verify:electron-poc
+pnpm verify:electron-poc:package
 pnpm --filter @accounting-timer/desktop start:packaged
 ```
 
-Optional Electron against Vite (dev only):
+Canonical desktop origin: `app://accounting-timer`.  
+Packaged GUI acceptance is a **manual checklist** in [docs/ELECTRON_POC.md](docs/ELECTRON_POC.md).
+
+Optional Electron against Vite (**unpackaged only**; ignored when packaged):
 
 ```bash
 pnpm dev:web
-# other terminal:
-# set ELECTRON_START_URL=http://127.0.0.1:5173
+# PowerShell:
+# $env:ELECTRON_START_URL="http://127.0.0.1:5173"
 pnpm dev:desktop
 ```
+
 
 ## Scope note
 

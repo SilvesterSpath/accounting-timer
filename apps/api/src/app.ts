@@ -27,7 +27,12 @@ export async function buildApp() {
     }
   });
 
-  app.get("/api/v1/health", async (): Promise<HealthResponse> => {
+  app.get("/api/v1/health", async (request): Promise<HealthResponse> => {
+    // PoC aid: surface Origin for Electron CORS verification (Finding 5).
+    request.log.info(
+      { origin: request.headers.origin ?? null },
+      "health origin",
+    );
     const database = await checkDatabase();
     return {
       status: database === "up" ? "ok" : "degraded",

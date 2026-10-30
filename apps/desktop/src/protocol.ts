@@ -4,9 +4,19 @@ import path from "node:path";
 import { Readable } from "node:stream";
 import { pathToFileURL } from "node:url";
 import { apiOriginFromConfig, type DesktopRuntimeConfig } from "./config";
+import {
+  APP_HOST,
+  APP_INDEX_URL,
+  APP_SCHEME,
+  CANONICAL_APP_ORIGIN,
+} from "./security";
 
-export const APP_SCHEME = "app";
-export const APP_HOST = "-";
+export {
+  APP_HOST,
+  APP_INDEX_URL,
+  APP_SCHEME,
+  CANONICAL_APP_ORIGIN,
+};
 
 export function registerAppScheme(): void {
   protocol.registerSchemesAsPrivileged([
@@ -50,7 +60,7 @@ function contentTypeFor(filePath: string): string {
   }
 }
 
-function buildCsp(apiOrigin: string): string {
+export function buildCsp(apiOrigin: string): string {
   return [
     "default-src 'self'",
     "script-src 'self'",
@@ -66,7 +76,8 @@ function buildCsp(apiOrigin: string): string {
 }
 
 /**
- * Serves only files under webDistRoot. Path traversal outside that root is denied.
+ * Serves only files under webDistRoot for the canonical app host.
+ * Unexpected hosts and path traversal are rejected.
  */
 export function attachAppProtocolHandler(
   webDistRoot: string,
@@ -77,6 +88,10 @@ export function attachAppProtocolHandler(
 
   protocol.handle(APP_SCHEME, async (request) => {
     const url = new URL(request.url);
+    if (url.hostname !== APP_HOST) {
+      return new Response("Forbidden host", { status: 403 });
+    }
+
     let pathname = decodeURIComponent(url.pathname);
     if (pathname === "/" || pathname === "") {
       pathname = "/index.html";
@@ -102,7 +117,6 @@ export function attachAppProtocolHandler(
       return new Response("Not found", { status: 404 });
     }
 
-    // Prefer net.fetch for file URLs when possible; fall back to stream.
     try {
       const fileResponse = await net.fetch(pathToFileURL(filePath).toString());
       const headers = new Headers(fileResponse.headers);
@@ -128,5 +142,5 @@ export function attachAppProtocolHandler(
 }
 
 export function appIndexUrl(): string {
-  return `${APP_SCHEME}://${APP_HOST}/index.html`;
+  return APP_INDEX_URL;
 }

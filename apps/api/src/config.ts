@@ -4,34 +4,41 @@ import { resolve } from "node:path";
 loadEnv({ path: resolve(process.cwd(), "../../.env"), quiet: true });
 loadEnv({ quiet: true });
 
-const defaultOrigins = [
+/** Development defaults — replaced entirely when CORS_ORIGINS is set. */
+export const DEFAULT_CORS_ORIGINS = [
   "http://localhost:5173",
   "http://127.0.0.1:5173",
-  // Electron custom protocol origins used by this PoC
-  "app://-",
   "app://accounting-timer",
-];
+] as const;
 
-function parseCorsOrigins(): string[] {
-  const fromList = process.env.CORS_ORIGINS;
+export function parseCorsOrigins(
+  env: NodeJS.ProcessEnv = process.env,
+): string[] {
+  const fromList = env.CORS_ORIGINS;
   if (fromList && fromList.trim()) {
+    // Explicit deployment config replaces defaults (does not extend them).
     return fromList
       .split(",")
       .map((value) => value.trim())
       .filter(Boolean);
   }
-  const single = process.env.CORS_ORIGIN;
+  const single = env.CORS_ORIGIN;
   if (single && single.trim()) {
-    return [single.trim(), ...defaultOrigins.filter((o) => o !== single.trim())];
+    // Legacy single-origin override also replaces the full default set.
+    return [single.trim()];
   }
-  return defaultOrigins;
+  return [...DEFAULT_CORS_ORIGINS];
 }
 
 export const config = {
-  host: process.env.API_HOST ?? "127.0.0.1",
+  host: envHost(),
   port: Number(process.env.API_PORT ?? "3001"),
   databaseUrl:
     process.env.DATABASE_URL ??
     "postgresql://accounting:accounting@127.0.0.1:5432/accounting_timer",
   corsOrigins: parseCorsOrigins(),
 };
+
+function envHost(): string {
+  return process.env.API_HOST ?? "127.0.0.1";
+}

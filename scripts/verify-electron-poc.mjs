@@ -1,26 +1,58 @@
 /**
- * Phase 0.5 checks that do not require a GUI session:
- * - web production build exists with relative assets
- * - desktop TypeScript build emits main/preload
- * - packaged win-unpacked exe exists when packaging already ran
+ * Electron PoC verification with explicit modes:
  *
- * GUI launch, fixture save dialog, and live API from Electron are manual.
+ *   node scripts/verify-electron-poc.mjs
+ *       A) Static source/configuration verification only
+ *
+ *   node scripts/verify-electron-poc.mjs --package
+ *       A + B) Fresh package build verification (runs pnpm package:desktop)
+ *       Does NOT claim GUI runtime success.
+ *
+ * Packaged GUI acceptance (C) is manual — see docs/ELECTRON_POC.md checklist.
+ * Unexecuted checks are never reported as PASS.
  */
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-const webDist = join(root, "apps", "web", "dist");
-const desktopDist = join(root, "apps", "desktop", "dist");
-const packagedExe = join(
-  root,
-  "apps",
-  "desktop",
-  "release",
-  "win-unpacked",
-  "AccountingTimerPoC.exe",
-);
+const requirePackage = process.argv.includes("--package");
+
+const paths = {
+  webDist: join(root, "apps", "web", "dist"),
+  desktopDist: join(root, "apps", "desktop", "dist"),
+  mainSrc: join(root, "apps", "desktop", "src", "main.ts"),
+  protocolSrc: join(root, "apps", "desktop", "src", "protocol.ts"),
+  securitySrc: join(root, "apps", "desktop", "src", "security.ts"),
+  apiConfigSrc: join(root, "apps", "api", "src", "config.ts"),
+  packagedExe: join(
+    root,
+    "apps",
+    "desktop",
+    "release",
+    "win-unpacked",
+    "AccountingTimerPoC.exe",
+  ),
+  packagedWeb: join(
+    root,
+    "apps",
+    "desktop",
+    "release",
+    "win-unpacked",
+    "resources",
+    "web",
+  ),
+  packagedConfig: join(
+    root,
+    "apps",
+    "desktop",
+    "release",
+    "win-unpacked",
+    "resources",
+    "config.json",
+  ),
+};
 
 const major = Number(process.versions.node.split(".")[0]);
 if (major !== 24) {
@@ -33,71 +65,118 @@ function fail(message) {
   process.exit(1);
 }
 
-if (!existsSync(join(webDist, "index.html"))) {
-  fail("apps/web/dist/index.html missing — run pnpm build:web");
+function mustInclude(filePath, needle, label) {
+  const text = readFileSync(filePath, "utf8");
+  if (!text.includes(needle)) {
+    fail(`${label}: missing required text ${JSON.stringify(needle)} in ${filePath}`);
+  }
 }
 
-const indexHtml = readFileSync(join(webDist, "index.html"), "utf8");
+function mustNotInclude(filePath, needle, label) {
+  const text = readFileSync(filePath, "utf8");
+  if (text.includes(needle)) {
+    fail(`${label}: forbidden text ${JSON.stringify(needle)} found in ${filePath}`);
+  }
+}
+
+console.log("=== A) Static source/configuration verification ===");
+
+mustInclude(
+  paths.securitySrc,
+  'CANONICAL_APP_ORIGIN = `${APP_SCHEME}://${APP_HOST}`',
+  "canonical origin",
+);
+mustInclude(paths.securitySrc, 'APP_HOST = "accounting-timer"', "canonical host");
+mustInclude(paths.securitySrc, "if (options.isPackaged)", "packaged start URL gate");
+mustInclude(paths.securitySrc, "ALLOWED_DEV_ORIGINS", "dev allowlist");
+mustInclude(paths.mainSrc, "contextIsolation: true", "contextIsolation");
+mustInclude(paths.mainSrc, "nodeIntegration: false", "nodeIntegration");
+mustInclude(paths.mainSrc, "webSecurity: true", "webSecurity");
+mustInclude(paths.mainSrc, "sandbox: true", "sandbox");
+mustInclude(paths.mainSrc, 'action: "deny"', "deny window open");
+mustInclude(paths.mainSrc, "senderFrame", "IPC frame validation");
+mustInclude(paths.mainSrc, "app.isPackaged", "packaged gate in main");
+mustNotInclude(paths.mainSrc, "shell.openExternal", "no automatic external opens");
+mustNotInclude(paths.mainSrc, "shell,", "shell must not be imported");
+
+mustInclude(paths.protocolSrc, "hostname !== APP_HOST", "protocol host check");
+mustInclude(paths.protocolSrc, "Content-Security-Policy", "CSP");
+mustInclude(paths.apiConfigSrc, "app://accounting-timer", "API CORS canonical origin");
+mustInclude(
+  paths.apiConfigSrc,
+  "Explicit deployment config replaces defaults",
+  "CORS replace semantics",
+);
+
+if (!existsSync(join(paths.webDist, "index.html"))) {
+  fail("apps/web/dist/index.html missing — run pnpm build:web");
+}
+const indexHtml = readFileSync(join(paths.webDist, "index.html"), "utf8");
 if (indexHtml.includes('src="/assets/') || indexHtml.includes('href="/assets/')) {
   fail("web dist uses absolute /assets paths; expected relative base for app://");
 }
-console.log("PASS: web dist present with relative asset references");
-
-if (!existsSync(join(desktopDist, "main.js"))) {
+if (!existsSync(join(paths.desktopDist, "main.js"))) {
   fail("apps/desktop/dist/main.js missing — run desktop build");
 }
-if (!existsSync(join(desktopDist, "preload.js"))) {
+if (!existsSync(join(paths.desktopDist, "preload.js"))) {
   fail("apps/desktop/dist/preload.js missing");
 }
-console.log("PASS: desktop main/preload compiled");
 
-const mainSrc = readFileSync(
-  join(root, "apps", "desktop", "src", "main.ts"),
-  "utf8",
-);
-for (const needle of [
-  "contextIsolation: true",
-  "nodeIntegration: false",
-  "webSecurity: true",
-  "registerAppScheme",
-]) {
-  if (!mainSrc.includes(needle) && needle !== "registerAppScheme") {
-    // registerAppScheme is imported usage
-  }
-}
-if (!mainSrc.includes("contextIsolation: true")) {
-  fail("contextIsolation missing");
-}
-if (!readFileSync(join(root, "apps", "desktop", "src", "protocol.ts"), "utf8")
-  .includes("registerSchemesAsPrivileged")) {
-  fail("privileged app scheme registration missing");
-}
-console.log("PASS: Electron security/protocol source checks");
+console.log("PASS: static security and build-artifact source checks");
 
-if (existsSync(packagedExe)) {
-  console.log("PASS: packaged Windows app present", packagedExe);
-  const webResource = join(
-    root,
-    "apps",
-    "desktop",
-    "release",
-    "win-unpacked",
-    "resources",
-    "web",
+if (requirePackage) {
+  console.log("=== B) Fresh package build verification ===");
+  const before = Date.now();
+  const pack = spawnSync(
+    process.platform === "win32" ? "pnpm.cmd" : "pnpm",
+    ["package:desktop"],
+    {
+      cwd: root,
+      encoding: "utf8",
+      shell: process.platform === "win32",
+      stdio: "inherit",
+    },
   );
-  if (!existsSync(join(webResource, "index.html"))) {
-    fail("packaged resources/web/index.html missing");
+  if (pack.status !== 0) {
+    fail("pnpm package:desktop failed");
   }
-  console.log("PASS: packaged app embeds shared web dist");
-  const assetFiles = readdirSync(join(webResource, "assets")).length;
-  console.log(`PASS: packaged web assets count=${assetFiles}`);
+  if (!existsSync(paths.packagedExe)) {
+    fail(`fresh package missing exe at ${paths.packagedExe}`);
+  }
+  const exeStat = statSync(paths.packagedExe);
+  if (exeStat.mtimeMs + 1000 < before) {
+    fail("packaged exe mtime is older than this verification run (not fresh)");
+  }
+  if (!existsSync(join(paths.packagedWeb, "index.html"))) {
+    fail("fresh package missing resources/web/index.html");
+  }
+  if (!existsSync(paths.packagedConfig)) {
+    fail("fresh package missing resources/config.json");
+  }
+  const assetCount = readdirSync(join(paths.packagedWeb, "assets")).length;
+  if (assetCount < 1) {
+    fail("fresh package web assets missing");
+  }
+  console.log("PASS: fresh package artifacts present", {
+    exe: paths.packagedExe,
+    assetCount,
+    mtime: exeStat.mtime.toISOString(),
+  });
+  console.log(
+    "NOTE: Spawning the exe is NOT treated as runtime acceptance. See manual checklist C.",
+  );
 } else {
   console.log(
-    "WARN: packaged exe not found yet — run pnpm package:desktop before GUI verification",
+    "SKIP: B) Fresh package verification (pass --package to build and verify artifacts)",
   );
 }
 
-console.log("Electron PoC static verification complete.");
+console.log("=== C) Packaged runtime acceptance ===");
 console.log(
-  "Deferred (no Phase 1 auth yet): login, create time entry, monthly CSV.",
+  "NOT EXECUTED by this script. Complete the manual checklist in docs/ELECTRON_POC.md.",
 );
+console.log(
+  "Do not treat process spawn / file existence as proof the UI rendered or API Origin worked.",
+);
+
+console.log("Electron PoC verification finished (automated portions only).");

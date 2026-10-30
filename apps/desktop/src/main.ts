@@ -3,22 +3,28 @@ import {
   BrowserWindow,
   dialog,
   ipcMain,
-  shell,
-  type WebContents,
+  type IpcMainInvokeEvent,
 } from "electron";
 import path from "node:path";
 import { writeFile } from "node:fs/promises";
-import { loadDesktopConfig } from "./config";
+import { loadDesktopConfig, type DesktopRuntimeConfig } from "./config";
 import {
   appIndexUrl,
   attachAppProtocolHandler,
   registerAppScheme,
 } from "./protocol";
+import {
+  assertFixturePayload,
+  isNavigationAllowed,
+  resolveRendererLoadUrl,
+  shouldAttachAppProtocol,
+} from "./security";
 
 registerAppScheme();
 
-const DEV_WEB_URL = process.env.ELECTRON_START_URL;
-const isDevLoad = Boolean(DEV_WEB_URL);
+let mainWindow: BrowserWindow | null = null;
+let allowDevOrigins = false;
+let desktopConfig: DesktopRuntimeConfig;
 
 function webDistPath(): string {
   if (app.isPackaged) {
@@ -27,26 +33,24 @@ function webDistPath(): string {
   return path.join(__dirname, "..", "..", "web", "dist");
 }
 
-function isTrustedSender(contents: WebContents): boolean {
-  try {
-    const url = new URL(contents.getURL());
-    if (url.protocol === "app:") {
-      return true;
-    }
-    if (
-      isDevLoad &&
-      (url.origin === "http://127.0.0.1:5173" ||
-        url.origin === "http://localhost:5173")
-    ) {
-      return true;
-    }
-  } catch {
-    return false;
+function assertTrustedIpc(event: IpcMainInvokeEvent): void {
+  if (!mainWindow || event.sender !== mainWindow.webContents) {
+    throw new Error("IPC rejected: unexpected window");
   }
-  return false;
+  const frame = event.senderFrame;
+  if (!frame || frame !== event.sender.mainFrame) {
+    throw new Error("IPC rejected: unexpected frame");
+  }
+  if (
+    !isNavigationAllowed(frame.url, {
+      allowDevOrigins,
+    })
+  ) {
+    throw new Error(`IPC rejected: untrusted origin (${frame.url})`);
+  }
 }
 
-function createWindow() {
+function createWindow(loadUrl: string) {
   const win = new BrowserWindow({
     width: 1100,
     height: 760,
@@ -58,78 +62,85 @@ function createWindow() {
       webSecurity: true,
     },
   });
+  mainWindow = win;
 
-  win.webContents.setWindowOpenHandler(({ url }) => {
-    if (url.startsWith("https://") || url.startsWith("http://")) {
-      void shell.openExternal(url);
-    }
-    return { action: "deny" };
-  });
+  // PoC: deny all external popups/windows. No system-browser handoff.
+  win.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
 
   win.webContents.on("will-navigate", (event, url) => {
-    const allowed =
-      url.startsWith("app://") ||
-      (isDevLoad &&
-        (url.startsWith("http://127.0.0.1:5173") ||
-          url.startsWith("http://localhost:5173")));
-    if (!allowed) {
+    if (!isNavigationAllowed(url, { allowDevOrigins })) {
       event.preventDefault();
     }
   });
 
-  if (DEV_WEB_URL) {
-    void win.loadURL(DEV_WEB_URL);
-  } else {
-    void win.loadURL(appIndexUrl());
-  }
+  win.on("closed", () => {
+    if (mainWindow === win) {
+      mainWindow = null;
+    }
+  });
+
+  void win.loadURL(loadUrl);
 }
 
 app.whenReady().then(() => {
-  const config = loadDesktopConfig();
+  try {
+    desktopConfig = loadDesktopConfig();
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : error);
+    app.exit(1);
+    return;
+  }
 
-  if (!isDevLoad) {
-    attachAppProtocolHandler(webDistPath(), config);
+  let load: { mode: "app" | "dev"; url: string };
+  try {
+    load = resolveRendererLoadUrl({
+      isPackaged: app.isPackaged,
+      electronStartUrl: process.env.ELECTRON_START_URL,
+    });
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : error);
+    app.exit(1);
+    return;
+  }
+
+  allowDevOrigins = !app.isPackaged && load.mode === "dev";
+
+  if (
+    shouldAttachAppProtocol({
+      isPackaged: app.isPackaged,
+      loadMode: load.mode,
+    })
+  ) {
+    attachAppProtocolHandler(webDistPath(), desktopConfig);
   }
 
   ipcMain.handle("desktop:get-config", (event) => {
-    if (!isTrustedSender(event.sender)) {
-      throw new Error("IPC sender not trusted");
-    }
-    return loadDesktopConfig();
+    assertTrustedIpc(event);
+    return desktopConfig;
   });
 
-  ipcMain.handle(
-    "desktop:save-fixture",
-    async (event, payload: { fileName: string; contents: string }) => {
-      if (!isTrustedSender(event.sender)) {
-        throw new Error("IPC sender not trusted");
-      }
-      if (
-        !payload ||
-        typeof payload.fileName !== "string" ||
-        typeof payload.contents !== "string"
-      ) {
-        throw new Error("Invalid fixture payload");
-      }
-      const safeName = path.basename(payload.fileName);
-      const result = await dialog.showSaveDialog({
-        title: "Save fixture file",
-        defaultPath: safeName,
-        filters: [{ name: "Text", extensions: ["txt"] }],
-      });
-      if (result.canceled || !result.filePath) {
-        return { ok: false as const, canceled: true as const };
-      }
-      await writeFile(result.filePath, payload.contents, "utf8");
-      return { ok: true as const, path: result.filePath };
-    },
-  );
+  ipcMain.handle("desktop:save-fixture", async (event, payload: unknown) => {
+    assertTrustedIpc(event);
+    const safe = assertFixturePayload(payload);
+    const safeName = path.basename(safe.fileName);
+    const result = await dialog.showSaveDialog({
+      title: "Save fixture file",
+      defaultPath: safeName,
+      filters: [{ name: "Text", extensions: ["txt"] }],
+    });
+    if (result.canceled || !result.filePath) {
+      return { ok: false as const, canceled: true as const };
+    }
+    await writeFile(result.filePath, safe.contents, "utf8");
+    return { ok: true as const, path: result.filePath };
+  });
 
-  createWindow();
+  createWindow(load.url);
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow();
+      const url = app.isPackaged ? appIndexUrl() : load.url;
+      createWindow(url);
     }
   });
 });

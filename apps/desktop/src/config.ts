@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { app } from "electron";
+import { validateApiBaseUrl } from "./security";
 
 export interface DesktopRuntimeConfig {
   apiBaseUrl: string;
@@ -17,39 +18,52 @@ function configPath(): string {
   return path.join(__dirname, "..", "resources", "config.json");
 }
 
-export function loadDesktopConfig(): DesktopRuntimeConfig {
-  const fromEnv = process.env.ACCOUNTING_TIMER_API_BASE_URL;
+function readFileConfig(): { apiBaseUrl?: string; environment?: string } {
   const file = configPath();
-  let fileUrl: string | undefined;
+  if (!existsSync(file)) {
+    return {};
+  }
+  try {
+    return JSON.parse(readFileSync(file, "utf8")) as {
+      apiBaseUrl?: string;
+      environment?: string;
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(
+      `Failed to parse desktop config at ${file}: ${message}`,
+    );
+  }
+}
 
-  if (existsSync(file)) {
-    try {
-      const parsed = JSON.parse(readFileSync(file, "utf8")) as {
-        apiBaseUrl?: string;
-        environment?: string;
-      };
-      fileUrl = parsed.apiBaseUrl;
-      return {
-        apiBaseUrl: fromEnv || fileUrl || DEFAULT_API,
-        appMode: "desktop",
-        environment: parsed.environment ?? "local",
-      };
-    } catch {
-      // fall through to defaults
-    }
+/**
+ * Load and validate runtime API configuration.
+ * Invalid values throw actionable errors (no silent fallback to unsafe defaults).
+ */
+export function loadDesktopConfig(): DesktopRuntimeConfig {
+  const fileConfig = readFileConfig();
+  const raw =
+    process.env.ACCOUNTING_TIMER_API_BASE_URL?.trim() ||
+    fileConfig.apiBaseUrl?.trim() ||
+    DEFAULT_API;
+
+  let apiBaseUrl: string;
+  try {
+    apiBaseUrl = validateApiBaseUrl(raw);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(
+      `Invalid desktop API configuration (${raw}): ${message}`,
+    );
   }
 
   return {
-    apiBaseUrl: fromEnv || DEFAULT_API,
+    apiBaseUrl,
     appMode: "desktop",
-    environment: "local",
+    environment: fileConfig.environment ?? "local",
   };
 }
 
 export function apiOriginFromConfig(config: DesktopRuntimeConfig): string {
-  try {
-    return new URL(config.apiBaseUrl).origin;
-  } catch {
-    return DEFAULT_API;
-  }
+  return new URL(config.apiBaseUrl).origin;
 }
