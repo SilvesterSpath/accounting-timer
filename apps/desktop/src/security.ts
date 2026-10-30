@@ -23,10 +23,18 @@ export function parseUrl(raw: string): URL | null {
   }
 }
 
+/**
+ * Trusted app:// URLs must use the canonical scheme/host and must not carry
+ * a port, username, or password.
+ */
 export function isCanonicalAppUrl(raw: string): boolean {
   const url = parseUrl(raw);
   if (!url) return false;
-  return url.protocol === `${APP_SCHEME}:` && url.hostname === APP_HOST;
+  if (url.protocol !== `${APP_SCHEME}:`) return false;
+  if (url.hostname !== APP_HOST) return false;
+  if (url.port !== "") return false;
+  if (url.username !== "" || url.password !== "") return false;
+  return true;
 }
 
 export function isAllowedDevOrigin(raw: string): boolean {

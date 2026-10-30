@@ -9,6 +9,7 @@ import {
   APP_INDEX_URL,
   APP_SCHEME,
   CANONICAL_APP_ORIGIN,
+  isCanonicalAppUrl,
 } from "./security";
 
 export {
@@ -16,6 +17,7 @@ export {
   APP_INDEX_URL,
   APP_SCHEME,
   CANONICAL_APP_ORIGIN,
+  isCanonicalAppUrl,
 };
 
 export function registerAppScheme(): void {
@@ -87,11 +89,11 @@ export function attachAppProtocolHandler(
   const csp = buildCsp(apiOriginFromConfig(config));
 
   protocol.handle(APP_SCHEME, async (request) => {
-    const url = new URL(request.url);
-    if (url.hostname !== APP_HOST) {
-      return new Response("Forbidden host", { status: 403 });
+    if (!isCanonicalAppUrl(request.url)) {
+      return new Response("Forbidden origin", { status: 403 });
     }
 
+    const url = new URL(request.url);
     let pathname = decodeURIComponent(url.pathname);
     if (pathname === "/" || pathname === "") {
       pathname = "/index.html";

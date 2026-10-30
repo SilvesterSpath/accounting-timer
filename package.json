@@ -17,7 +17,7 @@
     "build:web": "pnpm --filter @accounting-timer/shared-types build && pnpm --filter @accounting-timer/web build",
     "package:desktop": "pnpm build:web && pnpm --filter @accounting-timer/desktop package",
     "typecheck": "pnpm -r run typecheck",
-    "test": "pnpm -r run test",
+    "test": "pnpm -r run test && pnpm test:scripts",
     "lint": "pnpm -r run lint",
     "check:node": "node scripts/check-node.mjs",
     "db:up": "docker compose up -d",
@@ -25,7 +25,8 @@
     "db:ps": "docker compose ps",
     "verify:phase0": "node scripts/verify-phase0.mjs",
     "verify:electron-poc": "node scripts/verify-electron-poc.mjs",
-    "verify:electron-poc:package": "node scripts/verify-electron-poc.mjs --package"
+    "verify:electron-poc:package": "node scripts/verify-electron-poc.mjs --package",
+    "test:scripts": "node --test scripts/**/*.test.mjs"
   },
   "pnpm": {
     "onlyBuiltDependencies": ["esbuild", "electron", "electron-builder"]

@@ -71,10 +71,27 @@ test("dev ELECTRON_START_URL must be exact allowlisted origin", () => {
 
 test("canonical app URL checks reject unexpected hosts", () => {
   assert.equal(isCanonicalAppUrl("app://accounting-timer/index.html"), true);
+  assert.equal(isCanonicalAppUrl("app://accounting-timer/#/smoke"), true);
   assert.equal(isCanonicalAppUrl("app://-/index.html"), false);
   assert.equal(isCanonicalAppUrl("app://evil/index.html"), false);
   assert.equal(isCanonicalAppUrl("app://accounting-timer.evil/"), false);
   assert.equal(isCanonicalAppUrl("https://accounting-timer"), false);
+});
+
+test("canonical app URL rejects port, username, and password", () => {
+  assert.equal(isCanonicalAppUrl("app://accounting-timer:443/index.html"), false);
+  assert.equal(
+    isCanonicalAppUrl("app://user@accounting-timer/index.html"),
+    false,
+  );
+  assert.equal(
+    isCanonicalAppUrl("app://user:pass@accounting-timer/index.html"),
+    false,
+  );
+  assert.equal(
+    isCanonicalAppUrl("app://accounting-timer:5173/#/smoke"),
+    false,
+  );
 });
 
 test("dev origin checks are exact and reject prefixes/lookalikes", () => {
@@ -91,6 +108,18 @@ test("navigation allowlist uses parsed origins", () => {
       allowDevOrigins: false,
     }),
     true,
+  );
+  assert.equal(
+    isNavigationAllowed("app://accounting-timer:443/#/smoke", {
+      allowDevOrigins: false,
+    }),
+    false,
+  );
+  assert.equal(
+    isNavigationAllowed("app://user:pass@accounting-timer/#/smoke", {
+      allowDevOrigins: false,
+    }),
+    false,
   );
   assert.equal(
     isNavigationAllowed("http://127.0.0.1:5173/#/smoke", {
@@ -168,7 +197,10 @@ test("protocol rejects non-canonical hosts in source", () => {
   const protocol = readFileSync(join(here, "protocol.ts"), "utf8");
   const security = readFileSync(join(here, "security.ts"), "utf8");
   assert.match(protocol, /registerSchemesAsPrivileged/);
-  assert.match(protocol, /hostname !== APP_HOST/);
+  assert.match(protocol, /isCanonicalAppUrl\(request\.url\)/);
   assert.match(protocol, /Content-Security-Policy/);
   assert.match(security, /APP_HOST = "accounting-timer"/);
+  assert.match(security, /url\.port !== ""/);
+  assert.match(security, /url\.username/);
+  assert.match(security, /url\.password/);
 });

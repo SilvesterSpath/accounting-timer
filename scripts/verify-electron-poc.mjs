@@ -99,7 +99,10 @@ mustInclude(paths.mainSrc, "app.isPackaged", "packaged gate in main");
 mustNotInclude(paths.mainSrc, "shell.openExternal", "no automatic external opens");
 mustNotInclude(paths.mainSrc, "shell,", "shell must not be imported");
 
-mustInclude(paths.protocolSrc, "hostname !== APP_HOST", "protocol host check");
+mustInclude(paths.protocolSrc, "isCanonicalAppUrl(request.url)", "protocol canonical URL check");
+mustInclude(paths.securitySrc, 'url.port !== ""', "canonical URL rejects ports");
+mustInclude(paths.securitySrc, "url.username", "canonical URL rejects username");
+mustInclude(paths.securitySrc, "url.password", "canonical URL rejects password");
 mustInclude(paths.protocolSrc, "Content-Security-Policy", "CSP");
 mustInclude(paths.apiConfigSrc, "app://accounting-timer", "API CORS canonical origin");
 mustInclude(

@@ -1,22 +1,35 @@
 import { spawn } from "node:child_process";
-import { existsSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { dirname } from "node:path";
+import {
+  assertPackagedExeExists,
+  formatSpawnCreatedMessage,
+  formatSpawnFailedMessage,
+  getPackagedExePath,
+  projectRootFromHere,
+} from "./packaged-desktop-launch.mjs";
 
-const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-const exe = join(
-  root,
-  "apps",
-  "desktop",
-  "release",
-  "win-unpacked",
-  "AccountingTimerPoC.exe",
-);
+const root = projectRootFromHere();
+const exe = getPackagedExePath(root);
 
-if (!existsSync(exe)) {
-  console.error(`Packaged app not found at ${exe}`);
-  console.error("Run: pnpm package:desktop");
+try {
+  assertPackagedExeExists(exe);
+} catch (error) {
+  console.error(error instanceof Error ? error.message : error);
   process.exit(1);
+}
+
+let settled = false;
+function failSpawn(detail) {
+  if (settled) return;
+  settled = true;
+  console.error(formatSpawnFailedMessage(exe, detail));
+  process.exitCode = 1;
+}
+
+function reportSpawned(pid) {
+  if (settled) return;
+  settled = true;
+  console.log(formatSpawnCreatedMessage(exe, pid));
 }
 
 const child = spawn(exe, [], {
@@ -24,5 +37,25 @@ const child = spawn(exe, [], {
   detached: true,
   stdio: "ignore",
 });
-child.unref();
-console.log(`Launched packaged desktop app: ${exe}`);
+
+child.on("error", (error) => {
+  failSpawn(error.message);
+});
+
+child.on("spawn", () => {
+  reportSpawned(child.pid ?? "unknown");
+  child.unref();
+});
+
+// If the process exits immediately, that is not successful initialization.
+child.on("exit", (code, signal) => {
+  if (!settled) {
+    failSpawn(`process exited before spawn confirmation (code=${code}, signal=${signal})`);
+    return;
+  }
+  if (code !== null && code !== 0) {
+    console.error(
+      `Packaged process exited quickly with code=${code}. UI initialization was not verified.`,
+    );
+  }
+});
