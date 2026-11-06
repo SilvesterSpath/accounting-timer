@@ -4,6 +4,7 @@ import { timeEntries } from "../db/schema.js";
 import type { AuthUser } from "../auth/rbac.js";
 import { assertCan } from "../auth/rbac.js";
 import { minutesToDisplayHours, monthBounds } from "../lib/duration.js";
+import { requireKnownEmployeeId } from "./employees.js";
 
 function httpError(statusCode: number, message: string): Error {
   return Object.assign(new Error(message), { statusCode });
@@ -11,6 +12,7 @@ function httpError(statusCode: number, message: string): Error {
 
 export type SummaryReport = {
   scope: "own" | "management";
+  employeeId?: string;
   workDate?: string;
   month?: string;
   totalMinutes: number;
@@ -18,14 +20,28 @@ export type SummaryReport = {
   entryCount: number;
 };
 
+async function resolvePersonalEmployeeId(
+  user: AuthUser,
+  requestedEmployeeId?: string,
+): Promise<string> {
+  if (!requestedEmployeeId || requestedEmployeeId === user.employeeId) {
+    if (!user.employeeId) {
+      throw httpError(400, "Authenticated user has no employee profile");
+    }
+    return user.employeeId;
+  }
+  assertCan(user, "time_entries:list_others");
+  await requireKnownEmployeeId(requestedEmployeeId);
+  return requestedEmployeeId;
+}
+
 export async function getDailySummary(
   user: AuthUser,
   workDate: string,
+  options: { employeeId?: string } = {},
 ): Promise<SummaryReport> {
-  if (!user.employeeId) {
-    throw httpError(400, "Authenticated user has no employee profile");
-  }
   assertCan(user, "time_entries:list_own");
+  const employeeId = await resolvePersonalEmployeeId(user, options.employeeId);
 
   const [row] = await db
     .select({
@@ -35,7 +51,7 @@ export async function getDailySummary(
     .from(timeEntries)
     .where(
       and(
-        eq(timeEntries.employeeId, user.employeeId),
+        eq(timeEntries.employeeId, employeeId),
         eq(timeEntries.workDate, workDate),
         eq(timeEntries.isCurrent, true),
         isNull(timeEntries.deletedAt),
@@ -45,6 +61,7 @@ export async function getDailySummary(
   const totalMinutes = Number(row?.totalMinutes ?? 0);
   return {
     scope: "own",
+    employeeId,
     workDate,
     totalMinutes,
     totalHoursDisplay: minutesToDisplayHours(totalMinutes),
@@ -55,7 +72,7 @@ export async function getDailySummary(
 export async function getMonthlySummary(
   user: AuthUser,
   month: string,
-  options: { management?: boolean } = {},
+  options: { management?: boolean; employeeId?: string } = {},
 ): Promise<SummaryReport> {
   const { start, endExclusive } = monthBounds(month);
 
@@ -86,10 +103,8 @@ export async function getMonthlySummary(
     };
   }
 
-  if (!user.employeeId) {
-    throw httpError(400, "Authenticated user has no employee profile");
-  }
   assertCan(user, "time_entries:list_own");
+  const employeeId = await resolvePersonalEmployeeId(user, options.employeeId);
 
   const [row] = await db
     .select({
@@ -99,7 +114,7 @@ export async function getMonthlySummary(
     .from(timeEntries)
     .where(
       and(
-        eq(timeEntries.employeeId, user.employeeId),
+        eq(timeEntries.employeeId, employeeId),
         gte(timeEntries.workDate, start),
         lt(timeEntries.workDate, endExclusive),
         eq(timeEntries.isCurrent, true),
@@ -110,6 +125,7 @@ export async function getMonthlySummary(
   const totalMinutes = Number(row?.totalMinutes ?? 0);
   return {
     scope: "own",
+    employeeId,
     month,
     totalMinutes,
     totalHoursDisplay: minutesToDisplayHours(totalMinutes),

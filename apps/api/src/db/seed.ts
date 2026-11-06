@@ -87,6 +87,12 @@ export async function seedDemoUsers(options: {
     displayName: "Eve Employee",
   });
   await insertUserIfMissing({
+    email: "employee-b@example.com",
+    role: "employee",
+    active: true,
+    displayName: "Ben Employee",
+  });
+  await insertUserIfMissing({
     email: "manager@example.com",
     role: "manager",
     active: true,

@@ -6,6 +6,7 @@ import { assertCan } from "../auth/rbac.js";
 import { db } from "../db/client.js";
 import { activities, clients } from "../db/schema.js";
 import { syncMockCrm } from "../services/crm.js";
+import { listEmployeesForOperator } from "../services/employees.js";
 import { getDailySummary, getMonthlySummary } from "../services/reports.js";
 import {
   createTimeEntry,
@@ -71,6 +72,11 @@ export async function domainRoutes(app: FastifyInstance): Promise<void> {
     return syncMockCrm(user.id);
   });
 
+  app.get("/api/v1/employees", async (request) => {
+    const user = requireAuth(request);
+    return listEmployeesForOperator(user);
+  });
+
   app.get("/api/v1/time-entries", async (request) => {
     const user = requireAuth(request);
     const query = request.query as {
@@ -116,13 +122,17 @@ export async function domainRoutes(app: FastifyInstance): Promise<void> {
       workDate?: string;
       month?: string;
       scope?: string;
+      employeeId?: string;
     };
     if (query.workDate) {
-      return getDailySummary(user, query.workDate);
+      return getDailySummary(user, query.workDate, {
+        employeeId: query.employeeId,
+      });
     }
     if (query.month) {
       return getMonthlySummary(user, query.month, {
         management: query.scope === "management",
+        employeeId: query.employeeId,
       });
     }
     return { error: "Provide workDate or month" };

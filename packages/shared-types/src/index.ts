@@ -17,6 +17,14 @@ export interface AuthUserDto {
   employeeId: string | null;
 }
 
+/** Directory row for operator timesheet inspection (manager/admin). */
+export interface EmployeeDto {
+  id: string;
+  displayName: string;
+  email: string | null;
+  active: boolean;
+}
+
 export interface ClientDto {
   id: string;
   name: string;
@@ -49,6 +57,8 @@ export interface TimeEntryDto {
 
 export interface SummaryReportDto {
   scope: "own" | "management";
+  /** When set, totals are for this employee's personal sheet (operator inspection). */
+  employeeId?: string;
   workDate?: string;
   month?: string;
   totalMinutes: number;

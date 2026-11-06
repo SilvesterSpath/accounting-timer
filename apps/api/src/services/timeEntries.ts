@@ -5,6 +5,7 @@ import type { AuthUser } from "../auth/rbac.js";
 import { assertCan, can } from "../auth/rbac.js";
 import { assertDurationMinutes } from "../lib/duration.js";
 import { writeAudit } from "./audit.js";
+import { requireKnownEmployeeId } from "./employees.js";
 
 function httpError(statusCode: number, message: string): Error {
   return Object.assign(new Error(message), { statusCode });
@@ -59,6 +60,7 @@ export async function listTimeEntries(
   let employeeFilter = ownEmployeeId;
   if (query.employeeId && query.employeeId !== ownEmployeeId) {
     assertCan(user, "time_entries:list_others");
+    await requireKnownEmployeeId(query.employeeId);
     employeeFilter = query.employeeId;
   }
 
@@ -182,16 +184,10 @@ export async function patchTimeEntry(
 ): Promise<TimeEntryDto> {
   const existing = await getTimeEntry(user, id);
   const ownEmployeeId = await requireOwnEmployee(user);
-  if (
-    existing.employeeId !== ownEmployeeId &&
-    !can(user, "time_entries:read_others")
-  ) {
-    throw httpError(403, "Forbidden");
-  }
-  if (existing.employeeId !== ownEmployeeId) {
-    // Managers/admins may edit others in Phase 1 matrix.
-  } else {
+  if (existing.employeeId === ownEmployeeId) {
     assertCan(user, "time_entries:create_own");
+  } else if (!can(user, "time_entries:read_others")) {
+    throw httpError(403, "Forbidden");
   }
 
   if (existing.version !== input.version) {
@@ -252,10 +248,9 @@ export async function deleteTimeEntry(
 ): Promise<void> {
   const existing = await getTimeEntry(user, id);
   const ownEmployeeId = await requireOwnEmployee(user);
-  if (
-    existing.employeeId !== ownEmployeeId &&
-    !can(user, "time_entries:read_others")
-  ) {
+  if (existing.employeeId === ownEmployeeId) {
+    assertCan(user, "time_entries:create_own");
+  } else if (!can(user, "time_entries:read_others")) {
     throw httpError(403, "Forbidden");
   }
   if (existing.version !== version) {

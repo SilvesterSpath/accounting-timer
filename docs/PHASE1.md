@@ -13,9 +13,19 @@ Password for all **new** demo users: `Password123!`
 | Email | Role |
 |-------|------|
 | `employee@example.com` | employee |
+| `employee-b@example.com` | employee |
 | `manager@example.com` | manager |
 | `admin@example.com` | admin (CRM sync) |
 | `disabled@example.com` | employee, inactive |
+
+### Timesheet access groups vs persisted roles
+
+The product talks about two **timesheet access levels**:
+
+- **Employee** — own timesheet only (`employee` role)
+- **Operator** — inspect/manage others’ timesheets (`manager` and `admin` roles)
+
+These are access groupings for timesheet visibility, **not** additional persisted roles. The database still stores exactly three roles: `employee`, `manager`, and `admin`. Admin retains CRM sync; manager does not.
 
 Demo seeding is **explicit only** (`pnpm db:seed:demo`). API startup applies migrations but does **not** re-seed. Re-running demo seed never overwrites existing users’ password, role, or active flag.
 
