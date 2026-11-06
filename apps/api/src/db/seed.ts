@@ -9,6 +9,7 @@ import {
 import { hashPassword } from "../auth/passwords.js";
 import { applyMigrations } from "./migrate.js";
 import { pool } from "../db.js";
+import { seedShowcaseWorkload } from "./showcaseWorkload.js";
 
 export const DEMO_SEED_PASSWORD = "Password123!";
 
@@ -20,7 +21,16 @@ export const DEMO_SEED_PASSWORD = "Password123!";
 export async function seedDemoUsers(options: {
   /** Allow when NODE_ENV=production only if operator set ALLOW_DEMO_SEED=1 or tests pass this. */
   force?: boolean;
-} = {}): Promise<{ createdUsers: string[] }> {
+  /** Seed distinctive demo time entries for the current Budapest month (CLI / hosted). */
+  withShowcase?: boolean;
+} = {}): Promise<{
+  createdUsers: string[];
+  showcase: {
+    clientsEnsured: number;
+    entriesInserted: number;
+    month: string;
+  } | null;
+}> {
   const isProd = process.env.NODE_ENV === "production";
   if (isProd && process.env.ALLOW_DEMO_SEED !== "1" && !options.force) {
     throw new Error(
@@ -141,14 +151,18 @@ export async function seedDemoUsers(options: {
     }
   }
 
-  return { createdUsers };
+  const showcase = options.withShowcase
+    ? await seedShowcaseWorkload()
+    : null;
+
+  return { createdUsers, showcase };
 }
 
 if (
   process.argv[1]?.endsWith("seed.ts") ||
   process.argv[1]?.endsWith("seed.js")
 ) {
-  seedDemoUsers()
+  seedDemoUsers({ withShowcase: true })
     .then(async (result) => {
       console.log(
         "Demo seed complete.",
@@ -156,6 +170,13 @@ if (
           ? `Created: ${result.createdUsers.join(", ")}`
           : "No new users (existing rows preserved).",
       );
+      if (result.showcase) {
+        console.log(
+          `Showcase workload (${result.showcase.month}):`,
+          `${result.showcase.entriesInserted} entries inserted,`,
+          `${result.showcase.clientsEnsured} clients added.`,
+        );
+      }
       console.log("Demo password (new users only):", DEMO_SEED_PASSWORD);
       await pool.end();
     })

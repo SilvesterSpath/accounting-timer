@@ -8,6 +8,7 @@ import {
 } from "./schema.js";
 import { hashPassword } from "../auth/passwords.js";
 import { syncMockCrm } from "../services/crm.js";
+import { seedShowcaseWorkload } from "./showcaseWorkload.js";
 
 export const HOSTED_EMPLOYEE_EMAIL = "employee@example.com";
 export const HOSTED_OPERATOR_EMAIL = "operator@example.com";
@@ -18,6 +19,8 @@ export type DemoBootstrapResult = {
   createdUsers: string[];
   crmSynced: boolean;
   upsertedClients: number;
+  showcaseMonth: string;
+  showcaseEntriesInserted: number;
 };
 
 async function upsertUser(input: {
@@ -169,11 +172,15 @@ export async function runDemoBootstrap(
     upsertedClients = result.upserted;
   }
 
+  const showcase = await seedShowcaseWorkload();
+
   return {
     operatorUserId,
     employeeUserId,
     createdUsers,
     crmSynced,
     upsertedClients,
+    showcaseMonth: showcase.month,
+    showcaseEntriesInserted: showcase.entriesInserted,
   };
 }

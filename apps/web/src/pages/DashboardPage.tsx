@@ -17,10 +17,7 @@ import {
   formatHuMonth,
 } from "../lib/huFormat";
 import { formatRoleLabel } from "../lib/roleLabels";
-
-function clientDisplayName(row: ManagementClientWorkloadDto["byClient"][number]): string {
-  return row.isSystemInternal ? `${row.name} (belső)` : row.name;
-}
+import { ClientWorkloadChart } from "../components/ClientWorkloadChart";
 
 export function DashboardPage() {
   const { state, logout } = useAuth();
@@ -40,11 +37,6 @@ export function DashboardPage() {
       }),
     [month, result],
   );
-
-  const maxMinutes = useMemo(() => {
-    if (!displayed?.byClient.length) return 0;
-    return Math.max(...displayed.byClient.map((c) => c.totalMinutes));
-  }, [displayed]);
 
   const reload = useCallback(async () => {
     if (!isValidReportingMonth(month)) {
@@ -217,37 +209,7 @@ export function DashboardPage() {
             Nincs adat a kiválasztott időszakra
           </p>
         ) : (
-          <ul className="space-y-3">
-            {displayed.byClient.map((row) => {
-              const widthPct =
-                maxMinutes > 0
-                  ? Math.max(4, (row.totalMinutes / maxMinutes) * 100)
-                  : 0;
-              return (
-                <li key={row.clientId} className="text-sm">
-                  <div className="mb-1 flex flex-wrap items-baseline justify-between gap-2">
-                    <span className="font-medium text-slate-900">
-                      {clientDisplayName(row)}
-                    </span>
-                    <span className="tabular-nums text-slate-700">
-                      {formatHuHours(row.totalHoursDisplay)} óra
-                    </span>
-                  </div>
-                  <div className="h-3 overflow-hidden rounded-full bg-slate-200">
-                    <div
-                      className={
-                        row.isSystemInternal
-                          ? "h-full rounded-full bg-slate-500"
-                          : "h-full rounded-full bg-slate-900"
-                      }
-                      style={{ width: `${widthPct}%` }}
-                      title={`${formatHuHours(row.totalHoursDisplay)} óra`}
-                    />
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
+          <ClientWorkloadChart rows={displayed.byClient} />
         )}
       </section>
     </main>
