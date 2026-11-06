@@ -75,6 +75,17 @@ export async function seedShowcaseWorkload(): Promise<{
         syncedAt: new Date(),
       });
       clientsEnsured += 1;
+    } else if (existing[0].name !== row.name) {
+      await db
+        .update(clients)
+        .set({
+          name: row.name,
+          active: true,
+          syncedAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(eq(clients.id, existing[0].id));
+      clientsEnsured += 1;
     }
   }
 
@@ -124,11 +135,11 @@ export async function seedShowcaseWorkload(): Promise<{
     chunks: Array<{ day: number; hours: number; who: number; note: string }>;
   }> = [
     {
-      externalId: "CRM-100", // Acme ~78 óra
+      externalId: "CRM-100", // Pannon Könyvelő ~78 óra
       activityId: consult.id,
       chunks: [
         { day: 3, hours: 24, who: 0, note: "Havi zárás előkészítés" },
-        { day: 10, hours: 22, who: 1, note: "Bevallás-egyáztatás" },
+        { day: 10, hours: 22, who: 1, note: "Áfa bevallás egyeztetés" },
         { day: 17, hours: 18, who: 0, note: "Ügyfél-egyeztetés" },
         { day: 24, hours: 14, who: 2, note: "Vezetői átnézés" },
       ],
@@ -144,7 +155,7 @@ export async function seedShowcaseWorkload(): Promise<{
       ],
     },
     {
-      externalId: "CRM-200", // Northwind ~54 óra
+      externalId: "CRM-200", // Szabó Gábor e.v. ~54 óra
       activityId: consult.id,
       chunks: [
         { day: 5, hours: 16, who: 0, note: "Főkönyvi elemzés" },
@@ -154,11 +165,11 @@ export async function seedShowcaseWorkload(): Promise<{
       ],
     },
     {
-      externalId: "CRM-300", // Contoso ~45 óra
+      externalId: "CRM-300", // Kiss Mária e.v. ~45 óra
       activityId: consult.id,
       chunks: [
-        { day: 6, hours: 14, who: 1, note: "Jogi ügyfél support" },
-        { day: 13, hours: 12, who: 0, note: "Szerződés-követés" },
+        { day: 6, hours: 14, who: 1, note: "Áfa bevallás előkészítés" },
+        { day: 13, hours: 12, who: 0, note: "Konzultáció" },
         { day: 20, hours: 11, who: 1, note: "Számla-egyeztetés" },
         { day: 27, hours: 8, who: 2, note: "Havi összefoglaló" },
       ],

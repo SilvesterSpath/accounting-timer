@@ -84,7 +84,7 @@ async function catalog(token: string) {
   assert.equal(clients.statusCode, 200, clients.body);
   const clientList = clients.json() as Array<{ id: string; name: string }>;
   const client =
-    clientList.find((c) => c.name === "Internal work") ?? clientList[0];
+    clientList.find((c) => c.name === "Belső munka") ?? clientList[0];
   assert.ok(client);
 
   const activities = await app.inject({

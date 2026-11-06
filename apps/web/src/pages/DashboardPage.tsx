@@ -18,6 +18,7 @@ import {
 } from "../lib/huFormat";
 import { formatRoleLabel } from "../lib/roleLabels";
 import { ClientWorkloadChart } from "../components/ClientWorkloadChart";
+import { MonthSelect } from "../components/MonthSelect";
 
 export function DashboardPage() {
   const { state, logout } = useAuth();
@@ -132,12 +133,7 @@ export function DashboardPage() {
         </h2>
         <label className="flex max-w-xs flex-col gap-1 text-sm">
           <span className="text-slate-500">Hónap</span>
-          <input
-            type="month"
-            className="rounded-lg border border-slate-300 px-3 py-2"
-            value={month}
-            onChange={(e) => setMonth(e.target.value)}
-          />
+          <MonthSelect value={month} onChange={setMonth} />
         </label>
         <p className="mt-2 text-sm text-slate-600">
           Alapértelmezés: aktuális hónap (Europe/Budapest).

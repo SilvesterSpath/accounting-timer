@@ -206,8 +206,8 @@ run("Management client workload aggregates, reconciles, and excludes deleted", a
 
   const employee = await login("employee@example.com");
   const { clientList, activityId } = await catalog(employee.accessToken);
-  const acme = clientList.find((c) => c.name === "Acme Holdings");
-  const contoso = clientList.find((c) => c.name === "Contoso Legal");
+  const acme = clientList.find((c) => c.name === "Pannon Könyvelő Kft.");
+  const contoso = clientList.find((c) => c.name === "Kiss Mária e.v.");
   const internal = clientList.find((c) => c.isSystemInternal);
   assert.ok(acme);
   assert.ok(contoso);

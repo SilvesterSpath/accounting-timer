@@ -86,16 +86,28 @@ async function ensureCatalog(): Promise<void> {
     await db.insert(clients).values({
       sourceSystem: "system",
       externalId: "INTERNAL",
-      name: "Internal work",
+      name: "Belső munka",
       active: true,
       isSystemInternal: true,
       syncedAt: new Date(),
     });
+  } else if (internal[0].name !== "Belső munka") {
+    await db
+      .update(clients)
+      .set({
+        name: "Belső munka",
+        updatedAt: new Date(),
+      })
+      .where(eq(clients.id, internal[0].id));
   }
 
   for (const activity of [
-    { code: "CONSULT", name: "Consulting", isInternal: false },
-    { code: "INTERNAL", name: "Internal", isInternal: true },
+    {
+      code: "CONSULT",
+      name: "Áfa bevallás, és konzultáció",
+      isInternal: false,
+    },
+    { code: "INTERNAL", name: "Belső munka", isInternal: true },
   ]) {
     const found = await db
       .select()
@@ -104,6 +116,11 @@ async function ensureCatalog(): Promise<void> {
       .limit(1);
     if (!found[0]) {
       await db.insert(activities).values(activity);
+    } else if (found[0].name !== activity.name) {
+      await db
+        .update(activities)
+        .set({ name: activity.name })
+        .where(eq(activities.id, found[0].id));
     }
   }
 }

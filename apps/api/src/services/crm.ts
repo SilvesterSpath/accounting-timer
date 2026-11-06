@@ -5,9 +5,9 @@ import { writeAudit } from "./audit.js";
 
 /** Gate A fictional CRM catalog — Admin sync upserts into clients. */
 export const MOCK_CRM_CLIENTS = [
-  { externalId: "CRM-100", name: "Acme Holdings" },
-  { externalId: "CRM-200", name: "Northwind Traders" },
-  { externalId: "CRM-300", name: "Contoso Legal" },
+  { externalId: "CRM-100", name: "Pannon Könyvelő Kft." },
+  { externalId: "CRM-200", name: "Szabó Gábor e.v." },
+  { externalId: "CRM-300", name: "Kiss Mária e.v." },
 ] as const;
 
 export async function syncMockCrm(actorUserId: string): Promise<{

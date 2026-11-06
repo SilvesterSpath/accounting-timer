@@ -93,7 +93,7 @@ run("Phase 1 vertical slice: CRM → entry → exact monthly delta + audit", asy
     headers: { authorization: `Bearer ${employee.accessToken}` },
   });
   const clientList = clients.json() as Array<{ id: string; name: string }>;
-  const client = clientList.find((c) => c.name === "Acme Holdings");
+  const client = clientList.find((c) => c.name === "Pannon Könyvelő Kft.");
   assert.ok(client);
 
   const activities = await app.inject({
