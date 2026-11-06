@@ -1,7 +1,8 @@
 import { useState, type FormEvent } from "react";
 import { Navigate } from "react-router-dom";
-import { ApiError } from "../api/client";
+import { postLoginPath } from "../auth/landingPath";
 import { useAuth } from "../auth/AuthContext";
+import { formatApiErrorHu } from "../lib/apiErrorHu";
 
 export function LoginPage() {
   const { state, login } = useAuth();
@@ -11,7 +12,7 @@ export function LoginPage() {
   const [pending, setPending] = useState(false);
 
   if (state.status === "authenticated") {
-    return <Navigate to="/app" replace />;
+    return <Navigate to={postLoginPath(state.user.role)} replace />;
   }
 
   async function onSubmit(event: FormEvent) {
@@ -21,9 +22,7 @@ export function LoginPage() {
     try {
       await login(email, password);
     } catch (err) {
-      setError(
-        err instanceof ApiError ? err.message : "A bejelentkezés nem sikerült",
-      );
+      setError(formatApiErrorHu(err, "A bejelentkezés nem sikerült"));
     } finally {
       setPending(false);
     }

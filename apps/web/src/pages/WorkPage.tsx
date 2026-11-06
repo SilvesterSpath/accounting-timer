@@ -14,8 +14,10 @@ import type {
   SummaryReportDto,
   TimeEntryDto,
 } from "@accounting-timer/shared-types";
-import { ApiError, apiFetch } from "../api/client";
+import { apiFetch } from "../api/client";
+import { isOperatorRole } from "../auth/landingPath";
 import { useAuth } from "../auth/AuthContext";
+import { formatApiErrorHu } from "../lib/apiErrorHu";
 import { budapestCalendarDate } from "../lib/budapestDate";
 import {
   formatHuDate,
@@ -23,6 +25,7 @@ import {
   formatHuInteger,
   formatHuMonth,
 } from "../lib/huFormat";
+import { formatRoleLabel } from "../lib/roleLabels";
 import {
   employeeOptionLabel,
   isValidWorkDate,
@@ -32,10 +35,6 @@ import {
   workbenchScopeKey,
   type WorkbenchSheetPayload,
 } from "../lib/workbenchScope";
-
-function isOperatorRole(role: string): boolean {
-  return role === "manager" || role === "admin";
-}
 
 type SheetResult = WorkbenchSheetPayload<TimeEntryDto[], SummaryReportDto>;
 
@@ -224,11 +223,7 @@ export function WorkPage() {
     } catch (err) {
       if (loadSeqRef.current !== seq) return;
       setSheetResult(null);
-      setError(
-        err instanceof ApiError
-          ? err.message
-          : "Az adatok betöltése sikertelen",
-      );
+      setError(formatApiErrorHu(err, "Az adatok betöltése sikertelen"));
     } finally {
       if (loadSeqRef.current === seq) {
         setSheetLoading(false);
@@ -271,9 +266,7 @@ export function WorkPage() {
       catalogLoadedRef.current = false;
       await reload();
     } catch (err) {
-      setError(
-        err instanceof ApiError ? err.message : "A CRM-szinkron sikertelen",
-      );
+      setError(formatApiErrorHu(err, "A CRM-szinkron sikertelen"));
     }
   }
 
@@ -297,7 +290,7 @@ export function WorkPage() {
       setDescription("");
       await reload();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "A mentés sikertelen");
+      setError(formatApiErrorHu(err, "A mentés sikertelen"));
     }
   }
 
@@ -312,10 +305,15 @@ export function WorkPage() {
             Időrögzítés
           </h1>
           <p className="mt-1 text-slate-600">
-            {state.user.email} · {state.user.role}
+            {state.user.email} · {formatRoleLabel(state.user.role)}
           </p>
         </div>
-        <div className="flex gap-3 text-sm">
+        <div className="flex flex-wrap gap-3 text-sm">
+          {isOperator ? (
+            <Link className="text-sky-800 underline" to="/dashboard">
+              Vezetői áttekintés
+            </Link>
+          ) : null}
           <Link className="text-sky-800 underline" to="/">
             Állapot
           </Link>

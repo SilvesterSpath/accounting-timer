@@ -84,6 +84,9 @@ export function HomePage() {
         <Link className="text-sky-800 underline" to="/login">
           Bejelentkezés
         </Link>
+        <Link className="text-sky-800 underline" to="/dashboard">
+          Vezetői áttekintés
+        </Link>
         <Link className="text-sky-800 underline" to="/app">
           Munkafelület
         </Link>

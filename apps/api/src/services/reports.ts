@@ -1,6 +1,6 @@
-import { and, eq, gte, isNull, lt, sql } from "drizzle-orm";
+import { and, desc, eq, gte, isNull, lt, sql } from "drizzle-orm";
 import { db } from "../db/client.js";
-import { timeEntries } from "../db/schema.js";
+import { clients, timeEntries } from "../db/schema.js";
 import type { AuthUser } from "../auth/rbac.js";
 import { assertCan } from "../auth/rbac.js";
 import { minutesToDisplayHours, monthBounds } from "../lib/duration.js";
@@ -130,5 +130,105 @@ export async function getMonthlySummary(
     totalMinutes,
     totalHoursDisplay: minutesToDisplayHours(totalMinutes),
     entryCount: Number(row?.entryCount ?? 0),
+  };
+}
+
+export type ManagementClientWorkload = {
+  month: string;
+  totalMinutes: number;
+  totalHoursDisplay: number;
+  entryCount: number;
+  activeClientCount: number;
+  byClient: Array<{
+    clientId: string;
+    name: string;
+    isSystemInternal: boolean;
+    totalMinutes: number;
+    totalHoursDisplay: number;
+    entryCount: number;
+  }>;
+};
+
+/** Reject missing/malformed reporting months with HTTP 400 (incl. 2026-13). */
+export function requireReportingMonth(month: string | undefined): string {
+  if (!month || typeof month !== "string") {
+    throw httpError(400, "month must be YYYY-MM");
+  }
+  try {
+    monthBounds(month);
+  } catch {
+    throw httpError(400, "month must be YYYY-MM");
+  }
+  return month;
+}
+
+/**
+ * Operator dashboard: month totals + time grouped by client.
+ * Headline totals are summed from the same grouped rows as the breakdown so
+ * concurrent writes cannot make the card and chart disagree.
+ * Internal (system) clients are returned with isSystemInternal=true so the UI
+ * can label them explicitly rather than treating them as ordinary clients.
+ * activeClientCount counts active external clients only (excludes system-internal).
+ */
+export async function getManagementClientWorkload(
+  user: AuthUser,
+  month: string,
+): Promise<ManagementClientWorkload> {
+  assertCan(user, "reports:management");
+  const reportingMonth = requireReportingMonth(month);
+  const { start, endExclusive } = monthBounds(reportingMonth);
+
+  const [activeClients] = await db
+    .select({
+      count: sql<number>`count(*)::int`,
+    })
+    .from(clients)
+    .where(
+      and(eq(clients.active, true), eq(clients.isSystemInternal, false)),
+    );
+
+  const grouped = await db
+    .select({
+      clientId: clients.id,
+      name: clients.name,
+      isSystemInternal: clients.isSystemInternal,
+      totalMinutes: sql<number>`coalesce(sum(${timeEntries.durationMinutes}), 0)::int`,
+      entryCount: sql<number>`count(*)::int`,
+    })
+    .from(timeEntries)
+    .innerJoin(clients, eq(timeEntries.clientId, clients.id))
+    .where(
+      and(
+        gte(timeEntries.workDate, start),
+        lt(timeEntries.workDate, endExclusive),
+        eq(timeEntries.isCurrent, true),
+        isNull(timeEntries.deletedAt),
+      ),
+    )
+    .groupBy(clients.id, clients.name, clients.isSystemInternal)
+    .orderBy(desc(sql`sum(${timeEntries.durationMinutes})`));
+
+  const byClient = grouped.map((row) => {
+    const minutes = Number(row.totalMinutes ?? 0);
+    return {
+      clientId: row.clientId,
+      name: row.name,
+      isSystemInternal: row.isSystemInternal,
+      totalMinutes: minutes,
+      totalHoursDisplay: minutesToDisplayHours(minutes),
+      entryCount: Number(row.entryCount ?? 0),
+    };
+  });
+
+  const totalMinutes = byClient.reduce((sum, row) => sum + row.totalMinutes, 0);
+  const entryCount = byClient.reduce((sum, row) => sum + row.entryCount, 0);
+
+  return {
+    month: reportingMonth,
+    totalMinutes,
+    totalHoursDisplay: minutesToDisplayHours(totalMinutes),
+    entryCount,
+    activeClientCount: Number(activeClients?.count ?? 0),
+    byClient,
   };
 }

@@ -7,7 +7,12 @@ import { db } from "../db/client.js";
 import { activities, clients } from "../db/schema.js";
 import { syncMockCrm } from "../services/crm.js";
 import { listEmployeesForOperator } from "../services/employees.js";
-import { getDailySummary, getMonthlySummary } from "../services/reports.js";
+import {
+  getDailySummary,
+  getManagementClientWorkload,
+  getMonthlySummary,
+  requireReportingMonth,
+} from "../services/reports.js";
 import {
   createTimeEntry,
   deleteTimeEntry,
@@ -136,5 +141,12 @@ export async function domainRoutes(app: FastifyInstance): Promise<void> {
       });
     }
     return { error: "Provide workDate or month" };
+  });
+
+  app.get("/api/v1/reports/management/client-workload", async (request) => {
+    const user = requireAuth(request);
+    const query = request.query as { month?: string };
+    const month = requireReportingMonth(query.month);
+    return getManagementClientWorkload(user, month);
   });
 }

@@ -65,3 +65,21 @@ export interface SummaryReportDto {
   totalHoursDisplay: number;
   entryCount: number;
 }
+
+/** Operator management dashboard — monthly totals grouped by client. */
+export interface ManagementClientWorkloadDto {
+  month: string;
+  totalMinutes: number;
+  totalHoursDisplay: number;
+  entryCount: number;
+  /** Active external clients only (active=true and not system-internal). */
+  activeClientCount: number;
+  byClient: Array<{
+    clientId: string;
+    name: string;
+    isSystemInternal: boolean;
+    totalMinutes: number;
+    totalHoursDisplay: number;
+    entryCount: number;
+  }>;
+}
