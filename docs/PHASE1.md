@@ -38,7 +38,9 @@ Workbench day/month defaults use **Europe/Budapest**.
 - Production requires `JWT_SECRET` (no hardcoded production fallback)
 - Login throttling: per-IP and per-account failure windows
 - Refresh rotation is transactional; concurrent reuse → one winner, family revoke
+- Replay of a rotated refresh token **commits** family revocation before HTTP 401 (successor invalidated)
 - Cookie-based refresh **and** logout require trusted `Origin`
+- Destructive integration tests require isolated DB only (`127.0.0.1:5433` / `accounting_timer_test`)
 - Browser tabs coordinate refresh via BroadcastChannel (same-tab in-flight dedupe)
 
 ## Acceptance

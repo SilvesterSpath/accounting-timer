@@ -20,6 +20,10 @@ function httpError(statusCode: number, message: string): Error {
   return Object.assign(new Error(message), { statusCode });
 }
 
+type RotateOutcome =
+  | { ok: true; user: AuthUser }
+  | { ok: false; statusCode: number; message: string };
+
 export async function loadAuthUser(userId: string): Promise<AuthUser | null> {
   const [user] = await db
     .select()
@@ -100,6 +104,10 @@ export async function loginWithPassword(
  * Atomically consumes a refresh token inside a transaction.
  * Concurrent callers with the same token: at most one succeeds;
  * the loser triggers family revocation (reuse signal).
+ *
+ * Rejection paths that revoke must **return** from the transaction
+ * (commit) and only then throw HTTP 401/403 — throwing inside the
+ * transaction would roll back the revocation.
  */
 export async function rotateRefreshToken(rawToken: string): Promise<{
   accessToken: string;
@@ -112,7 +120,7 @@ export async function rotateRefreshToken(rawToken: string): Promise<{
     Date.now() + config.refreshTokenDays * 24 * 60 * 60 * 1000,
   );
 
-  const rotated = await db.transaction(async (tx) => {
+  const outcome = await db.transaction(async (tx): Promise<RotateOutcome> => {
     // Lock candidate row(s) for this hash.
     await tx.execute(
       sql`SELECT id FROM refresh_sessions WHERE token_hash = ${tokenHash} FOR UPDATE`,
@@ -125,11 +133,11 @@ export async function rotateRefreshToken(rawToken: string): Promise<{
       .limit(1);
 
     if (!session) {
-      throw httpError(401, "Invalid refresh token");
+      return { ok: false, statusCode: 401, message: "Invalid refresh token" };
     }
 
     if (session.revokedAt || session.expiresAt.getTime() < Date.now()) {
-      // Reuse / expired: revoke the whole family.
+      // Reuse / expired: revoke the whole family, then commit before 401.
       await tx
         .update(refreshSessions)
         .set({ revokedAt: new Date() })
@@ -139,7 +147,7 @@ export async function rotateRefreshToken(rawToken: string): Promise<{
             isNull(refreshSessions.revokedAt),
           ),
         );
-      throw httpError(401, "Invalid refresh token");
+      return { ok: false, statusCode: 401, message: "Invalid refresh token" };
     }
 
     const authUser = await loadAuthUser(session.userId);
@@ -148,8 +156,14 @@ export async function rotateRefreshToken(rawToken: string): Promise<{
         .update(refreshSessions)
         .set({ revokedAt: new Date() })
         .where(eq(refreshSessions.familyId, session.familyId));
-      throw httpError(authUser && !authUser.active ? 403 : 401, 
-        authUser && !authUser.active ? "User is disabled" : "Invalid refresh token");
+      return {
+        ok: false,
+        statusCode: authUser && !authUser.active ? 403 : 401,
+        message:
+          authUser && !authUser.active
+            ? "User is disabled"
+            : "Invalid refresh token",
+      };
     }
 
     // Atomic consume: only one concurrent updater wins.
@@ -169,7 +183,7 @@ export async function rotateRefreshToken(rawToken: string): Promise<{
         .update(refreshSessions)
         .set({ revokedAt: new Date() })
         .where(eq(refreshSessions.familyId, session.familyId));
-      throw httpError(401, "Invalid refresh token");
+      return { ok: false, statusCode: 401, message: "Invalid refresh token" };
     }
 
     await tx.insert(refreshSessions).values({
@@ -179,19 +193,29 @@ export async function rotateRefreshToken(rawToken: string): Promise<{
       expiresAt,
     });
 
-    return authUser;
+    return { ok: true, user: authUser };
   });
 
+  if (!outcome.ok) {
+    throw httpError(outcome.statusCode, outcome.message);
+  }
+
   const accessToken = await signAccessToken({
-    sub: rotated.id,
-    role: rotated.role,
-    email: rotated.email,
+    sub: outcome.user.id,
+    role: outcome.user.role,
+    email: outcome.user.email,
   } satisfies AccessClaims);
 
-  return { accessToken, refreshToken: next.token, user: rotated };
+  return {
+    accessToken,
+    refreshToken: next.token,
+    user: outcome.user,
+  };
 }
 
-export async function revokeRefreshToken(rawToken: string | undefined): Promise<void> {
+export async function revokeRefreshToken(
+  rawToken: string | undefined,
+): Promise<void> {
   if (!rawToken) return;
   const tokenHash = hashRefreshToken(rawToken);
   const [session] = await db

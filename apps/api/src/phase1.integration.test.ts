@@ -8,8 +8,13 @@ import { seedDemoUsers } from "./db/seed.js";
 import { pool } from "./db.js";
 import { config } from "./config.js";
 import { resetLoginThrottleForTests } from "./auth/loginThrottle.js";
+import {
+  assertIsolatedTestDatabaseUrl,
+  isIsolatedTestDatabaseUrl,
+  UnsafeTestDatabaseError,
+} from "./test/assertIsolatedTestDatabase.js";
 
-const usingTestDb = /:5433\/|accounting_timer_test/.test(config.databaseUrl);
+const usingTestDb = isIsolatedTestDatabaseUrl(config.databaseUrl);
 
 const hasDb = await pool
   .query("SELECT 1")
@@ -18,10 +23,11 @@ const hasDb = await pool
 
 const run = hasDb && usingTestDb ? test : test.skip;
 
-if (hasDb && !usingTestDb) {
-  test("integration tests refuse development database URL", () => {
-    assert.fail(
-      `Refusing to run integration tests against ${config.databaseUrl}. Use TEST_DATABASE_URL / port 5433.`,
+if (!usingTestDb) {
+  test("integration tests refuse non-isolated database URL", () => {
+    assert.throws(
+      () => assertIsolatedTestDatabaseUrl(config.databaseUrl),
+      UnsafeTestDatabaseError,
     );
   });
 }
@@ -318,7 +324,59 @@ run("Browser login omits refreshToken from JSON body", async () => {
   assert.ok(cookie?.value);
 });
 
-run("Concurrent refresh with same token yields one winner", async () => {
+run("Replaying a rotated refresh token invalidates its successor", async () => {
+  await resetTestData();
+  resetLoginThrottleForTests();
+  const loginResponse = await app.inject({
+    method: "POST",
+    url: "/api/v1/auth/login",
+    headers: { origin: "http://127.0.0.1:5173" },
+    payload: { email: "employee@example.com", password: "Password123!" },
+  });
+  assert.equal(loginResponse.statusCode, 200, loginResponse.body);
+  const original = loginResponse.cookies.find((c) => c.name === "at_refresh");
+  assert.ok(original?.value);
+
+  const rotated = await app.inject({
+    method: "POST",
+    url: "/api/v1/auth/refresh",
+    headers: {
+      origin: "http://127.0.0.1:5173",
+      cookie: `at_refresh=${original.value}`,
+    },
+    payload: {},
+  });
+  assert.equal(rotated.statusCode, 200, rotated.body);
+  const successor = rotated.cookies.find((c) => c.name === "at_refresh");
+  assert.ok(successor?.value);
+  assert.notEqual(successor.value, original.value);
+
+  // Replay of the already-rotated token is a reuse signal (T02).
+  const replay = await app.inject({
+    method: "POST",
+    url: "/api/v1/auth/refresh",
+    headers: {
+      origin: "http://127.0.0.1:5173",
+      cookie: `at_refresh=${original.value}`,
+    },
+    payload: {},
+  });
+  assert.equal(replay.statusCode, 401);
+
+  // Family revocation must have committed before the 401 — successor is dead.
+  const successorRefresh = await app.inject({
+    method: "POST",
+    url: "/api/v1/auth/refresh",
+    headers: {
+      origin: "http://127.0.0.1:5173",
+      cookie: `at_refresh=${successor.value}`,
+    },
+    payload: {},
+  });
+  assert.equal(successorRefresh.statusCode, 401);
+});
+
+run("Concurrent refresh with same token yields one winner and revokes family", async () => {
   await resetTestData();
   const loginResponse = await app.inject({
     method: "POST",
@@ -368,23 +426,18 @@ run("Concurrent refresh with same token yields one winner", async () => {
   });
   assert.equal(reuseOriginal.statusCode, 401);
 
-  // Reuse detection revokes the rotation family (T02). Cross-tab UI coordination
-  // exists so benign multi-tab clients avoid this race; after a proven race,
-  // re-login is required.
+  // Loser's reuse detection commits family revoke; winner's successor is invalid.
+  // Benign multi-tab clients should use BroadcastChannel to avoid this race.
   const winnerCookie = winner.cookies.find((c) => c.name === "at_refresh");
-  if (winnerCookie) {
-    const followUp = await app.inject({
-      method: "POST",
-      url: "/api/v1/auth/refresh",
-      headers: {
-        origin: "http://127.0.0.1:5173",
-        cookie: `at_refresh=${winnerCookie.value}`,
-      },
-      payload: {},
-    });
-    assert.ok(
-      followUp.statusCode === 200 || followUp.statusCode === 401,
-      `unexpected follow-up status ${followUp.statusCode}`,
-    );
-  }
+  assert.ok(winnerCookie?.value);
+  const followUp = await app.inject({
+    method: "POST",
+    url: "/api/v1/auth/refresh",
+    headers: {
+      origin: "http://127.0.0.1:5173",
+      cookie: `at_refresh=${winnerCookie.value}`,
+    },
+    payload: {},
+  });
+  assert.equal(followUp.statusCode, 401);
 });
