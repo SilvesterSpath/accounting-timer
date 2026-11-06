@@ -18,6 +18,12 @@ import { ApiError, apiFetch } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { budapestCalendarDate } from "../lib/budapestDate";
 import {
+  formatHuDate,
+  formatHuHours,
+  formatHuInteger,
+  formatHuMonth,
+} from "../lib/huFormat";
+import {
   employeeOptionLabel,
   isValidWorkDate,
   selectDisplayedSheet,
@@ -72,13 +78,15 @@ export function WorkPage() {
   const reportingMonth = tryReportingMonthFromWorkDate(workDate);
 
   const selectedEmployeeLabel = useMemo(() => {
-    if (!viewingEmployeeId) return "your timesheet";
+    if (!viewingEmployeeId) return "saját időnyilvántartás";
     const match = employees.find((e) => e.id === viewingEmployeeId);
     if (match) {
-      return match.active ? match.displayName : `${match.displayName} (inactive)`;
+      return match.active
+        ? match.displayName
+        : `${match.displayName} (inaktív)`;
     }
-    if (viewingSelf) return "you";
-    return "selected employee";
+    if (viewingSelf) return "Ön";
+    return "kiválasztott munkatárs";
   }, [employees, viewingEmployeeId, viewingSelf]);
 
   const selectionScope = useMemo(
@@ -216,7 +224,11 @@ export function WorkPage() {
     } catch (err) {
       if (loadSeqRef.current !== seq) return;
       setSheetResult(null);
-      setError(err instanceof ApiError ? err.message : "Failed to load data");
+      setError(
+        err instanceof ApiError
+          ? err.message
+          : "Az adatok betöltése sikertelen",
+      );
     } finally {
       if (loadSeqRef.current === seq) {
         setSheetLoading(false);
@@ -225,8 +237,6 @@ export function WorkPage() {
   }, [selectedEmployeeId, state, workDate]);
 
   useEffect(() => {
-    // Drop any bound result as soon as selection changes so prior figures
-    // cannot render under a new employee/date label for even one frame.
     setSheetResult(null);
   }, [activeScopeKey]);
 
@@ -241,7 +251,7 @@ export function WorkPage() {
   }, [reload, state.status, activeScopeKey, workDateValid]);
 
   if (state.status === "loading") {
-    return <main className="p-8 text-slate-600">Loading…</main>;
+    return <main className="p-8 text-slate-600">Betöltés…</main>;
   }
   if (state.status !== "authenticated") {
     return <Navigate to="/login" replace />;
@@ -255,11 +265,15 @@ export function WorkPage() {
         "/api/v1/crm/sync/clients",
         { method: "POST", body: "{}" },
       );
-      setMessage(`CRM sync upserted ${result.upserted} clients`);
+      setMessage(
+        `CRM-szinkron: ${formatHuInteger(result.upserted)} ügyfél frissítve`,
+      );
       catalogLoadedRef.current = false;
       await reload();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "CRM sync failed");
+      setError(
+        err instanceof ApiError ? err.message : "A CRM-szinkron sikertelen",
+      );
     }
   }
 
@@ -279,11 +293,11 @@ export function WorkPage() {
           description: description || undefined,
         }),
       });
-      setMessage("Time entry saved");
+      setMessage("Időrögzítés mentve");
       setDescription("");
       await reload();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Save failed");
+      setError(err instanceof ApiError ? err.message : "A mentés sikertelen");
     }
   }
 
@@ -292,10 +306,10 @@ export function WorkPage() {
       <header className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <p className="text-sm uppercase tracking-[0.2em] text-slate-600">
-            Accounting Timer
+            Munkaidő-nyilvántartó
           </p>
           <h1 className="mt-2 text-3xl font-semibold text-slate-900">
-            Time entry
+            Időrögzítés
           </h1>
           <p className="mt-1 text-slate-600">
             {state.user.email} · {state.user.role}
@@ -303,14 +317,14 @@ export function WorkPage() {
         </div>
         <div className="flex gap-3 text-sm">
           <Link className="text-sky-800 underline" to="/">
-            Health
+            Állapot
           </Link>
           <button
             type="button"
             className="text-slate-700 underline"
             onClick={() => void logout()}
           >
-            Sign out
+            Kijelentkezés
           </button>
         </div>
       </header>
@@ -318,24 +332,24 @@ export function WorkPage() {
       {state.user.role === "admin" ? (
         <section className="rounded-2xl border border-slate-300/70 bg-white/80 p-5">
           <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
-            Mock CRM
+            Próba CRM
           </h2>
           <button
             type="button"
             onClick={() => void onSyncCrm()}
             className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white"
           >
-            Sync clients
+            Ügyfelek szinkronizálása
           </button>
         </section>
       ) : null}
 
       <section className="rounded-2xl border border-slate-300/70 bg-white/80 p-5">
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
-          Reporting period
+          Jelentési időszak
         </h2>
         <label className="flex flex-col gap-1 text-sm">
-          <span className="text-slate-500">Work date</span>
+          <span className="text-slate-500">Munkanap</span>
           <input
             type="date"
             className="rounded-lg border border-slate-300 px-3 py-2"
@@ -346,11 +360,15 @@ export function WorkPage() {
         <p className="mt-2 text-sm text-slate-600">
           {workDateValid && reportingMonth ? (
             <>
-              Daily list uses this date; month totals use{" "}
-              <strong>{reportingMonth}</strong> (Europe/Budapest calendar month).
+              A napi lista erre a dátumra vonatkozik; a havi összesítés:{" "}
+              <strong>{formatHuMonth(reportingMonth)}</strong>{" "}
+              (Europe/Budapest naptárhónap).
             </>
           ) : (
-            <>Enter a complete work date (YYYY-MM-DD) to load timesheet totals.</>
+            <>
+              Adjon meg teljes munkanapot (ÉÉÉÉ-HH-NN) az összesítések
+              betöltéséhez.
+            </>
           )}
         </p>
       </section>
@@ -358,10 +376,10 @@ export function WorkPage() {
       {isOperator ? (
         <section className="rounded-2xl border border-slate-300/70 bg-white/80 p-5">
           <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
-            Inspect timesheet
+            Időnyilvántartás megtekintése
           </h2>
           <label className="flex flex-col gap-1 text-sm">
-            <span className="text-slate-500">Employee</span>
+            <span className="text-slate-500">Munkatárs</span>
             <select
               className="rounded-lg border border-slate-300 px-3 py-2"
               value={selectedEmployeeId ?? ownEmployeeId ?? ""}
@@ -380,8 +398,10 @@ export function WorkPage() {
             </select>
           </label>
           <p className="mt-3 text-sm text-slate-600">
-            Showing records for <strong>{selectedEmployeeLabel}</strong>
-            {viewingSelf ? "" : " (operator may adjust existing entries)"}.
+            Megjelenített adatok: <strong>{selectedEmployeeLabel}</strong>
+            {viewingSelf
+              ? ""
+              : " (az operátor módosíthatja a meglévő tételeket)"}.
           </p>
         </section>
       ) : null}
@@ -389,11 +409,11 @@ export function WorkPage() {
       {viewingSelf ? (
         <section className="rounded-2xl border border-slate-300/70 bg-white/80 p-5">
           <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
-            New entry
+            Új tétel
           </h2>
           <form onSubmit={onCreate} className="grid gap-3 sm:grid-cols-2">
             <label className="flex flex-col gap-1 text-sm">
-              <span className="text-slate-500">Client</span>
+              <span className="text-slate-500">Ügyfél</span>
               <select
                 className="rounded-lg border border-slate-300 px-3 py-2"
                 value={clientId}
@@ -402,13 +422,13 @@ export function WorkPage() {
                 {clients.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.name}
-                    {c.isSystemInternal ? " (internal)" : ""}
+                    {c.isSystemInternal ? " (belső)" : ""}
                   </option>
                 ))}
               </select>
             </label>
             <label className="flex flex-col gap-1 text-sm">
-              <span className="text-slate-500">Activity</span>
+              <span className="text-slate-500">Tevékenység</span>
               <select
                 className="rounded-lg border border-slate-300 px-3 py-2"
                 value={activityId}
@@ -422,7 +442,7 @@ export function WorkPage() {
               </select>
             </label>
             <label className="flex flex-col gap-1 text-sm">
-              <span className="text-slate-500">Duration (minutes)</span>
+              <span className="text-slate-500">Időtartam (perc)</span>
               <input
                 type="number"
                 min={1}
@@ -433,11 +453,12 @@ export function WorkPage() {
               />
             </label>
             <label className="flex flex-col gap-1 text-sm sm:col-span-2">
-              <span className="text-slate-500">Note</span>
+              <span className="text-slate-500">Megjegyzés</span>
               <input
                 className="rounded-lg border border-slate-300 px-3 py-2"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
+                placeholder="Opcionális megjegyzés"
               />
             </label>
             <button
@@ -445,14 +466,16 @@ export function WorkPage() {
               disabled={!workDateValid}
               className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white sm:col-span-2 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              Save entry{workDateValid ? ` for ${workDate}` : ""}
+              {workDateValid
+                ? `Rögzítés — ${formatHuDate(workDate)}`
+                : "Rögzítés"}
             </button>
           </form>
         </section>
       ) : (
         <section className="rounded-2xl border border-amber-200 bg-amber-50/80 p-5 text-sm text-amber-950">
-          New entries are always created under your own employee profile. Switch
-          the selector to yourself to add time.
+          Az új tételek mindig a saját munkatársi profiljához kerülnek. Válassza
+          ki önmagát a listából az időrögzítéshez.
         </section>
       )}
 
@@ -463,56 +486,56 @@ export function WorkPage() {
       )}
 
       {sheetLoading && !displayedSheet ? (
-        <p className="text-slate-600">Loading timesheet…</p>
+        <p className="text-slate-600">Időnyilvántartás betöltése…</p>
       ) : null}
 
       <section className="grid gap-4 sm:grid-cols-2">
         <div className="rounded-2xl border border-slate-300/70 bg-white/80 p-5">
           <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-500">
-            Daily total · {selectedEmployeeLabel}
+            Napi összesítés · {selectedEmployeeLabel}
           </h2>
           {displayedSheet ? (
             <>
               <p className="text-2xl font-semibold text-slate-900">
-                {displayedSheet.daily.totalMinutes} min
+                {formatHuInteger(displayedSheet.daily.totalMinutes)} perc
               </p>
               <p className="text-sm text-slate-600">
-                {displayedSheet.daily.totalHoursDisplay.toFixed(2)} h ·{" "}
-                {displayedSheet.daily.entryCount} entries
+                {formatHuHours(displayedSheet.daily.totalHoursDisplay)} óra ·{" "}
+                {formatHuInteger(displayedSheet.daily.entryCount)} tétel
               </p>
             </>
           ) : (
             <p className="text-sm text-slate-500">
               {!workDateValid
-                ? "Enter a valid date"
+                ? "Érvényes dátum szükséges"
                 : sheetLoading
-                  ? "Loading…"
-                  : "Unavailable"}
+                  ? "Betöltés…"
+                  : "Nem elérhető"}
             </p>
           )}
         </div>
         <div className="rounded-2xl border border-slate-300/70 bg-white/80 p-5">
           <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-500">
-            Month total · {selectedEmployeeLabel}
-            {reportingMonth ? ` · ${reportingMonth}` : ""}
+            Havi összesítés · {selectedEmployeeLabel}
+            {reportingMonth ? ` · ${formatHuMonth(reportingMonth)}` : ""}
           </h2>
           {displayedSheet ? (
             <>
               <p className="text-2xl font-semibold text-slate-900">
-                {displayedSheet.monthly.totalMinutes} min
+                {formatHuInteger(displayedSheet.monthly.totalMinutes)} perc
               </p>
               <p className="text-sm text-slate-600">
-                {displayedSheet.monthly.totalHoursDisplay.toFixed(2)} h ·{" "}
-                {displayedSheet.monthly.entryCount} entries
+                {formatHuHours(displayedSheet.monthly.totalHoursDisplay)} óra ·{" "}
+                {formatHuInteger(displayedSheet.monthly.entryCount)} tétel
               </p>
             </>
           ) : (
             <p className="text-sm text-slate-500">
               {!workDateValid
-                ? "Enter a valid date"
+                ? "Érvényes dátum szükséges"
                 : sheetLoading
-                  ? "Loading…"
-                  : "Unavailable"}
+                  ? "Betöltés…"
+                  : "Nem elérhető"}
             </p>
           )}
         </div>
@@ -521,33 +544,39 @@ export function WorkPage() {
       {isOperator && displayedSheet?.managementMonthly ? (
         <section className="rounded-2xl border border-slate-300/70 bg-white/80 p-5">
           <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-500">
-            Organization month total · {displayedSheet.reportingMonth}
+            Szervezeti havi összesítés ·{" "}
+            {formatHuMonth(displayedSheet.reportingMonth)}
           </h2>
           <p className="text-2xl font-semibold text-slate-900">
-            {displayedSheet.managementMonthly.totalMinutes} min
+            {formatHuInteger(displayedSheet.managementMonthly.totalMinutes)}{" "}
+            perc
           </p>
           <p className="text-sm text-slate-600">
-            {displayedSheet.managementMonthly.totalHoursDisplay.toFixed(2)} h ·{" "}
-            {displayedSheet.managementMonthly.entryCount} entries across all
-            employees
+            {formatHuHours(
+              displayedSheet.managementMonthly.totalHoursDisplay,
+            )}{" "}
+            óra ·{" "}
+            {formatHuInteger(displayedSheet.managementMonthly.entryCount)} tétel
+            az összes munkatársnál
           </p>
         </section>
       ) : null}
 
       <section className="rounded-2xl border border-slate-300/70 bg-white/80 p-5">
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
-          Entries for {workDateValid ? workDate : "…"} · {selectedEmployeeLabel}
+          Tételek · {workDateValid ? formatHuDate(workDate) : "…"} ·{" "}
+          {selectedEmployeeLabel}
         </h2>
         {!displayedSheet ? (
           <p className="text-slate-600">
             {!workDateValid
-              ? "Enter a valid work date to load entries."
+              ? "Adjon meg érvényes munkanapot a tételek betöltéséhez."
               : sheetLoading
-                ? "Loading entries…"
-                : "Entries unavailable."}
+                ? "Tételek betöltése…"
+                : "A tételek nem érhetők el."}
           </p>
         ) : displayedSheet.entries.length === 0 ? (
-          <p className="text-slate-600">No entries yet.</p>
+          <p className="text-slate-600">Nincs rögzített tétel.</p>
         ) : (
           <ul className="space-y-2 text-sm">
             {displayedSheet.entries.map((entry) => {
@@ -563,7 +592,9 @@ export function WorkPage() {
                     {activity?.name ?? entry.activityId}
                     {entry.description ? ` — ${entry.description}` : ""}
                   </span>
-                  <span className="font-medium">{entry.durationMinutes} min</span>
+                  <span className="font-medium">
+                    {formatHuInteger(entry.durationMinutes)} perc
+                  </span>
                 </li>
               );
             })}

@@ -102,8 +102,8 @@ export function employeeOptionLabel(input: {
 }): string {
   const parts = [input.displayName];
   if (input.email) parts.push(`(${input.email})`);
-  if (!input.active) parts.push("— inactive");
-  if (input.isSelf) parts.push("— you");
+  if (!input.active) parts.push("— inaktív");
+  if (input.isSelf) parts.push("— saját");
   return parts.join(" ");
 }
 

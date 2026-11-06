@@ -216,6 +216,6 @@ test("employeeOptionLabel marks inactive and self", () => {
       active: false,
       isSelf: false,
     }),
-    "Disabled User (disabled@example.com) — inactive",
+    "Disabled User (disabled@example.com) — inaktív",
   );
 });

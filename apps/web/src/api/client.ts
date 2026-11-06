@@ -52,7 +52,7 @@ export async function apiFetch<T>(
       "error" in data &&
       typeof (data as { error: unknown }).error === "string"
         ? (data as { error: string }).error
-        : `Request failed (${response.status})`;
+        : `A kérés sikertelen (${response.status})`;
     throw new ApiError(message, response.status);
   }
 

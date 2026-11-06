@@ -26,7 +26,7 @@ export function HomePage() {
 
         const response = await fetch(apiUrl("/api/v1/health", runtime));
         if (!response.ok) {
-          throw new Error(`Health check failed (${response.status})`);
+          throw new Error(`Az állapotellenőrzés sikertelen (${response.status})`);
         }
         const health = (await response.json()) as HealthResponse;
         if (!cancelled) {
@@ -37,7 +37,9 @@ export function HomePage() {
           setState({
             kind: "error",
             message:
-              error instanceof Error ? error.message : "Unknown health error",
+              error instanceof Error
+                ? error.message
+                : "Ismeretlen állapotellenőrzési hiba",
           });
         }
       }
@@ -53,10 +55,10 @@ export function HomePage() {
     setDownloadMessage(null);
     try {
       const target = await downloadFixtureFile();
-      setDownloadMessage(`Fixture saved: ${target}`);
+      setDownloadMessage(`Minta fájl mentve: ${target}`);
     } catch (error) {
       setDownloadMessage(
-        error instanceof Error ? error.message : "Fixture download failed",
+        error instanceof Error ? error.message : "A minta fájl letöltése sikertelen",
       );
     }
   }
@@ -64,75 +66,75 @@ export function HomePage() {
   return (
     <main className="mx-auto flex min-h-screen max-w-3xl flex-col justify-center gap-6 px-6 py-16">
       <p className="text-sm uppercase tracking-[0.2em] text-slate-600">
-        Accounting Timer
+        Munkaidő-nyilvántartó
       </p>
       <h1 className="text-4xl font-semibold tracking-tight text-slate-900">
-        Gate A — web + packaged desktop
+        Gate A — webes és asztali bemutató
       </h1>
       <p className="max-w-2xl text-lg leading-relaxed text-slate-700">
-        Mock CRM, time entries, and daily/monthly totals. Browser uses cookie
-        refresh; packaged Electron uses safeStorage body refresh. Sign in to use
-        the workbench.
+        Próba CRM, időrögzítés, valamint napi és havi összesítések. A böngésző
+        cookie-alapú frissítést használ; a csomagolt Electron a safeStorage
+        body-frissítést. A munkafelülethez jelentkezzen be.
       </p>
 
       <nav className="flex gap-4 text-sm">
         <Link className="text-sky-800 underline" to="/">
-          Home
+          Kezdőlap
         </Link>
         <Link className="text-sky-800 underline" to="/login">
-          Sign in
+          Bejelentkezés
         </Link>
         <Link className="text-sky-800 underline" to="/app">
-          Workbench
+          Munkafelület
         </Link>
         <Link className="text-sky-800 underline" to="/smoke">
-          Routing smoke
+          Útvonalteszt
         </Link>
       </nav>
 
       <section className="rounded-2xl border border-slate-300/70 bg-white/80 p-5 shadow-sm backdrop-blur">
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
-          Runtime
+          Futási környezet
         </h2>
         {config ? (
           <dl className="grid grid-cols-2 gap-3 text-sm text-slate-800">
             <div>
-              <dt className="text-slate-500">Mode</dt>
+              <dt className="text-slate-500">Mód</dt>
               <dd className="font-medium">{config.appMode}</dd>
             </div>
             <div>
-              <dt className="text-slate-500">API base</dt>
+              <dt className="text-slate-500">API alapcím</dt>
               <dd className="font-medium break-all">
-                {config.apiBaseUrl || "(same-origin / Vite proxy)"}
+                {config.apiBaseUrl || "(azonos eredet / Vite proxy)"}
               </dd>
             </div>
           </dl>
         ) : (
-          <p className="text-slate-600">Loading config…</p>
+          <p className="text-slate-600">Konfiguráció betöltése…</p>
         )}
       </section>
 
       <section className="rounded-2xl border border-slate-300/70 bg-white/80 p-5 shadow-sm backdrop-blur">
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
-          API health
+          API állapot
         </h2>
         {state.kind === "loading" && (
-          <p className="text-slate-600">Checking /api/v1/health…</p>
+          <p className="text-slate-600">/api/v1/health ellenőrzése…</p>
         )}
         {state.kind === "error" && (
           <p className="text-red-700">
-            {state.message}. Start Postgres (`pnpm db:up`) and the API (`pnpm
-            dev:api`).
+            {state.message}. Indítsa a Postgres adatbázist (`pnpm db:up`) és az
+            API-t (`pnpm dev:api`).
           </p>
         )}
         {state.kind === "ok" && (
           <dl className="grid grid-cols-2 gap-3 text-sm text-slate-800">
             <div>
-              <dt className="text-slate-500">Status</dt>
+              <dt className="text-slate-500">Állapot</dt>
               <dd className="font-medium">{state.health.status}</dd>
             </div>
             <div>
-              <dt className="text-slate-500">Database</dt>
+              <dt className="text-slate-500">Adatbázis</dt>
               <dd className="font-medium">{state.health.database}</dd>
             </div>
             <div>
@@ -140,7 +142,7 @@ export function HomePage() {
               <dd className="font-medium">{state.health.node}</dd>
             </div>
             <div>
-              <dt className="text-slate-500">Timestamp</dt>
+              <dt className="text-slate-500">Időbélyeg</dt>
               <dd className="font-medium">{state.health.timestamp}</dd>
             </div>
           </dl>
@@ -149,14 +151,14 @@ export function HomePage() {
 
       <section className="rounded-2xl border border-slate-300/70 bg-white/80 p-5 shadow-sm backdrop-blur">
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
-          Fixture download
+          Minta fájl
         </h2>
         <button
           type="button"
           onClick={() => void onDownloadFixture()}
           className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white"
         >
-          Download fixture file
+          Minta fájl letöltése
         </button>
         {downloadMessage && (
           <p className="mt-3 text-sm text-slate-700">{downloadMessage}</p>

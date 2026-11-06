@@ -21,7 +21,9 @@ export function LoginPage() {
     try {
       await login(email, password);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Login failed");
+      setError(
+        err instanceof ApiError ? err.message : "A bejelentkezés nem sikerült",
+      );
     } finally {
       setPending(false);
     }
@@ -31,11 +33,13 @@ export function LoginPage() {
     <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center gap-6 px-6">
       <div>
         <p className="text-sm uppercase tracking-[0.2em] text-slate-600">
-          Accounting Timer
+          Munkaidő-nyilvántartó
         </p>
-        <h1 className="mt-2 text-3xl font-semibold text-slate-900">Sign in</h1>
+        <h1 className="mt-2 text-3xl font-semibold text-slate-900">
+          Bejelentkezés
+        </h1>
         <p className="mt-2 text-slate-600">
-          Gate A — fictional users only (Phase 1 slice; Phase 2 desktop auth).
+          Bemutató környezet — csak fikciós felhasználói fiókokkal.
         </p>
       </div>
       <form
@@ -43,7 +47,7 @@ export function LoginPage() {
         className="flex flex-col gap-4 rounded-2xl border border-slate-300/70 bg-white/80 p-5 shadow-sm"
       >
         <label className="flex flex-col gap-1 text-sm">
-          <span className="text-slate-500">Email</span>
+          <span className="text-slate-500">E-mail</span>
           <input
             className="rounded-lg border border-slate-300 px-3 py-2"
             value={email}
@@ -52,7 +56,7 @@ export function LoginPage() {
           />
         </label>
         <label className="flex flex-col gap-1 text-sm">
-          <span className="text-slate-500">Password</span>
+          <span className="text-slate-500">Jelszó</span>
           <input
             type="password"
             className="rounded-lg border border-slate-300 px-3 py-2"
@@ -67,7 +71,7 @@ export function LoginPage() {
           disabled={pending || state.status === "loading"}
           className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
         >
-          {pending ? "Signing in…" : "Sign in"}
+          {pending ? "Bejelentkezés…" : "Bejelentkezés"}
         </button>
       </form>
     </main>
