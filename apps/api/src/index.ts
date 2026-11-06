@@ -2,8 +2,23 @@ import { buildApp } from "./app.js";
 import { config } from "./config.js";
 import { pool } from "./db.js";
 import { applyMigrations } from "./db/migrate.js";
+import { runDemoBootstrap } from "./db/demoBootstrap.js";
 
 await applyMigrations();
+
+if (config.demoBootstrap) {
+  const result = await runDemoBootstrap();
+  console.info(
+    JSON.stringify({
+      msg: "demo bootstrap complete",
+      createdUsers: result.createdUsers,
+      crmSynced: result.crmSynced,
+      upsertedClients: result.upsertedClients,
+      operatorUserId: result.operatorUserId,
+      // Never log passwords.
+    }),
+  );
+}
 
 const app = await buildApp();
 

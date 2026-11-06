@@ -3,7 +3,7 @@ import { after, before, test } from "node:test";
 import { buildApp } from "./app.js";
 import { pool } from "./db.js";
 
-const app = await buildApp();
+const app = await buildApp({ serveStatic: false });
 
 before(async () => {
   await app.ready();

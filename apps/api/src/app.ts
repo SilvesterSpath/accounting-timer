@@ -6,9 +6,21 @@ import { checkDatabase } from "./db.js";
 import { registerAuth } from "./auth/plugin.js";
 import { authRoutes } from "./routes/auth.js";
 import { domainRoutes } from "./routes/domain.js";
+import { registerStaticSite } from "./web/staticSite.js";
 
-export async function buildApp() {
-  const app = Fastify({ logger: true });
+export type BuildAppOptions = {
+  /** Override DB probe for readiness/health tests. */
+  checkDatabase?: () => Promise<"up" | "down">;
+  /** Skip static UI registration (API-only tests). */
+  serveStatic?: boolean;
+};
+
+export async function buildApp(options: BuildAppOptions = {}) {
+  const probe = options.checkDatabase ?? checkDatabase;
+  const app = Fastify({
+    logger: true,
+    trustProxy: config.trustProxy,
+  });
   const allowed = new Set(config.corsOrigins);
 
   await app.register(cookie);
@@ -60,7 +72,7 @@ export async function buildApp() {
       { origin: request.headers.origin ?? null },
       "health origin",
     );
-    const database = await checkDatabase();
+    const database = await probe();
     return {
       status: database === "up" ? "ok" : "degraded",
       service: "api",
@@ -69,6 +81,27 @@ export async function buildApp() {
       node: process.version,
     };
   });
+
+  app.get("/api/v1/ready", async (_request, reply) => {
+    const database = await probe();
+    if (database !== "up") {
+      return reply.code(503).send({
+        status: "not_ready",
+        database,
+        timestamp: new Date().toISOString(),
+      });
+    }
+    return {
+      status: "ready",
+      database,
+      timestamp: new Date().toISOString(),
+    };
+  });
+
+  // Register after API routes so /api always wins.
+  if (options.serveStatic !== false) {
+    await registerStaticSite(app, config.webDistDir);
+  }
 
   return app;
 }

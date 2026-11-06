@@ -6,6 +6,7 @@ Gate A **practice prototype** (fictional data). See:
 - [docs/ASSUMPTIONS.md](docs/ASSUMPTIONS.md) — Phase 0 prototype assumptions
 - [docs/ELECTRON_POC.md](docs/ELECTRON_POC.md) — Phase 0.5 Electron feasibility (`experiment/electron-poc`)
 - [docs/PHASE1.md](docs/PHASE1.md) — Phase 1 vertical slice (`feature/phase-1`)
+- [docs/RAILWAY_DEMO.md](docs/RAILWAY_DEMO.md) — browser-only Railway demo (no Electron)
 
 ## Prerequisites
 
@@ -69,6 +70,14 @@ pnpm dev
 # http://localhost:5173/login  — employee@example.com / Password123!
 # Admin CRM sync from /app after signing in as admin@example.com
 ```
+
+## Railway demo image (local smoke)
+
+```bash
+pnpm docker:smoke   # build Dockerfile; empty DB migrate+bootstrap+ready
+```
+
+See [docs/RAILWAY_DEMO.md](docs/RAILWAY_DEMO.md). Do not deploy until hosted HTTPS acceptance is complete.
 
 ## Scope note
 
