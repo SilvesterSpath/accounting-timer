@@ -1,4 +1,4 @@
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 import {
   assertTrustedOrigin,
@@ -18,19 +18,49 @@ const loginBody = z.object({
   password: z.string().min(1),
 });
 
+/**
+ * Login response shape: body refresh for canonical Electron Origin only (T03).
+ * Refresh/logout still select transport from which credential is present.
+ */
+export function usesBodyRefreshTransport(
+  request: FastifyRequest,
+): boolean {
+  const origin = request.headers.origin;
+  return (
+    origin === "app://accounting-timer" &&
+    config.corsOrigins.includes(origin)
+  );
+}
+
+function userDto(result: Awaited<ReturnType<typeof loginWithPassword>>) {
+  return {
+    id: result.user.id,
+    email: result.user.email,
+    role: result.user.role,
+    employeeId: result.user.employeeId,
+  };
+}
+
 function sendAuthPayload(
+  request: FastifyRequest,
   reply: import("fastify").FastifyReply,
   result: Awaited<ReturnType<typeof loginWithPassword>>,
 ) {
+  if (usesBodyRefreshTransport(request)) {
+    // Electron: refresh in JSON body only — do not set browser cookie.
+    clearRefreshCookie(reply);
+    return {
+      accessToken: result.accessToken,
+      refreshToken: result.refreshToken,
+      user: userDto(result),
+    };
+  }
+
+  // Browser: httpOnly cookie only — never put refresh token in JSON body.
   setRefreshCookie(reply, result.refreshToken);
   return {
     accessToken: result.accessToken,
-    user: {
-      id: result.user.id,
-      email: result.user.email,
-      role: result.user.role,
-      employeeId: result.user.employeeId,
-    },
+    user: userDto(result),
   };
 }
 
@@ -40,7 +70,7 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     const result = await loginWithPassword(body.email, body.password, {
       ip: request.ip,
     });
-    return sendAuthPayload(reply, result);
+    return sendAuthPayload(request, reply, result);
   });
 
   app.post("/api/v1/auth/refresh", async (request, reply) => {
@@ -59,7 +89,7 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
       assertTrustedOrigin(request);
     }
     const result = await rotateRefreshToken(raw);
-    return sendAuthPayload(reply, result);
+    return sendAuthPayload(request, reply, result);
   });
 
   app.post("/api/v1/auth/logout", async (request, reply) => {

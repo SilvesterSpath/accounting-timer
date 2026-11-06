@@ -10,6 +10,13 @@ import {
 import type { AuthUserDto } from "@accounting-timer/shared-types";
 import { apiFetch, setAccessToken } from "../api/client";
 import { coordinatedRefresh } from "./refreshCoordinator";
+import {
+  buildLogoutRequestInit,
+  buildRefreshRequestInit,
+  clearDesktopRefreshToken,
+  persistDesktopRefreshToken,
+  type AuthPayload,
+} from "./sessionTransport";
 
 type AuthState =
   | { status: "loading" }
@@ -30,14 +37,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const refresh = useCallback(async () => {
     const result = await coordinatedRefresh(async () => {
-      return apiFetch<{
-        accessToken: string;
-        user: AuthUserDto;
-      }>("/api/v1/auth/refresh", { method: "POST", body: "{}" });
+      const init = await buildRefreshRequestInit();
+      const payload = await apiFetch<AuthPayload>("/api/v1/auth/refresh", init);
+      await persistDesktopRefreshToken(payload.refreshToken);
+      return {
+        accessToken: payload.accessToken,
+        user: payload.user,
+      };
     });
 
     if (!result) {
       setAccessToken(null);
+      await clearDesktopRefreshToken();
       setState({ status: "anonymous" });
       return false;
     }
@@ -55,24 +66,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [refresh]);
 
   const login = useCallback(async (email: string, password: string) => {
-    const result = await apiFetch<{
-      accessToken: string;
-      user: AuthUserDto;
-    }>("/api/v1/auth/login", {
+    const result = await apiFetch<AuthPayload>("/api/v1/auth/login", {
       method: "POST",
       body: JSON.stringify({ email, password }),
     });
+    await persistDesktopRefreshToken(result.refreshToken);
     setAccessToken(result.accessToken);
-    setState({ status: "authenticated", user: result.user });
+    setState({ status: "authenticated", user: result.user as AuthUserDto });
   }, []);
 
   const logout = useCallback(async () => {
     try {
-      await apiFetch("/api/v1/auth/logout", {
-        method: "POST",
-        body: "{}",
-      });
+      const init = await buildLogoutRequestInit();
+      await apiFetch("/api/v1/auth/logout", init);
     } finally {
+      await clearDesktopRefreshToken();
       setAccessToken(null);
       setState({ status: "anonymous" });
     }

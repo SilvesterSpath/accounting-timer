@@ -67,11 +67,12 @@ export function HomePage() {
         Accounting Timer
       </p>
       <h1 className="text-4xl font-semibold tracking-tight text-slate-900">
-        Phase 1 vertical slice
+        Gate A — web + packaged desktop
       </h1>
       <p className="max-w-2xl text-lg leading-relaxed text-slate-700">
-        Mock CRM, time entries, and daily/monthly totals behind same-origin auth.
-        Sign in to use the workbench.
+        Mock CRM, time entries, and daily/monthly totals. Browser uses cookie
+        refresh; packaged Electron uses safeStorage body refresh. Sign in to use
+        the workbench.
       </p>
 
       <nav className="flex gap-4 text-sm">

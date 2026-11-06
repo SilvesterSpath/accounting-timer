@@ -35,7 +35,7 @@ export function LoginPage() {
         </p>
         <h1 className="mt-2 text-3xl font-semibold text-slate-900">Sign in</h1>
         <p className="mt-2 text-slate-600">
-          Phase 1 vertical slice — fictional Gate A users only.
+          Gate A — fictional users only (Phase 1 slice; Phase 2 desktop auth).
         </p>
       </div>
       <form

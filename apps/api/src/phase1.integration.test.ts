@@ -245,6 +245,79 @@ run("Cookie refresh and logout require trusted Origin", async () => {
   assert.equal(okLogout.statusCode, 200);
 });
 
+run("Desktop Origin login uses body refreshToken (no cookie session)", async () => {
+  await resetTestData();
+  resetLoginThrottleForTests();
+  const loginResponse = await app.inject({
+    method: "POST",
+    url: "/api/v1/auth/login",
+    headers: { origin: "app://accounting-timer" },
+    payload: { email: "employee@example.com", password: "Password123!" },
+  });
+  assert.equal(loginResponse.statusCode, 200, loginResponse.body);
+  const loginBody = loginResponse.json() as {
+    accessToken: string;
+    refreshToken?: string;
+  };
+  assert.ok(loginBody.accessToken);
+  assert.ok(loginBody.refreshToken, "Electron Origin must receive body refreshToken");
+
+  const liveCookie = loginResponse.cookies.find(
+    (c) => c.name === "at_refresh" && c.value && c.value.length > 0,
+  );
+  assert.equal(
+    liveCookie,
+    undefined,
+    "body transport must not set a usable refresh cookie",
+  );
+
+  const refreshed = await app.inject({
+    method: "POST",
+    url: "/api/v1/auth/refresh",
+    headers: { origin: "app://accounting-timer" },
+    payload: { refreshToken: loginBody.refreshToken },
+  });
+  assert.equal(refreshed.statusCode, 200, refreshed.body);
+  const next = refreshed.json() as {
+    accessToken: string;
+    refreshToken?: string;
+  };
+  assert.ok(next.refreshToken);
+  assert.notEqual(next.refreshToken, loginBody.refreshToken);
+
+  const logout = await app.inject({
+    method: "POST",
+    url: "/api/v1/auth/logout",
+    headers: { origin: "app://accounting-timer" },
+    payload: { refreshToken: next.refreshToken },
+  });
+  assert.equal(logout.statusCode, 200);
+
+  const reuse = await app.inject({
+    method: "POST",
+    url: "/api/v1/auth/refresh",
+    headers: { origin: "app://accounting-timer" },
+    payload: { refreshToken: next.refreshToken },
+  });
+  assert.equal(reuse.statusCode, 401);
+});
+
+run("Browser login omits refreshToken from JSON body", async () => {
+  await resetTestData();
+  resetLoginThrottleForTests();
+  const loginResponse = await app.inject({
+    method: "POST",
+    url: "/api/v1/auth/login",
+    headers: { origin: "http://127.0.0.1:5173" },
+    payload: { email: "employee@example.com", password: "Password123!" },
+  });
+  assert.equal(loginResponse.statusCode, 200, loginResponse.body);
+  const body = loginResponse.json() as { refreshToken?: string };
+  assert.equal(body.refreshToken, undefined);
+  const cookie = loginResponse.cookies.find((c) => c.name === "at_refresh");
+  assert.ok(cookie?.value);
+});
+
 run("Concurrent refresh with same token yields one winner", async () => {
   await resetTestData();
   const loginResponse = await app.inject({

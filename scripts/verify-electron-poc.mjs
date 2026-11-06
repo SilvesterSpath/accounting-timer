@@ -23,9 +23,21 @@ const paths = {
   webDist: join(root, "apps", "web", "dist"),
   desktopDist: join(root, "apps", "desktop", "dist"),
   mainSrc: join(root, "apps", "desktop", "src", "main.ts"),
+  preloadSrc: join(root, "apps", "desktop", "src", "preload.ts"),
+  secureStoreSrc: join(root, "apps", "desktop", "src", "secureStore.ts"),
   protocolSrc: join(root, "apps", "desktop", "src", "protocol.ts"),
   securitySrc: join(root, "apps", "desktop", "src", "security.ts"),
   apiConfigSrc: join(root, "apps", "api", "src", "config.ts"),
+  authRoutesSrc: join(root, "apps", "api", "src", "routes", "auth.ts"),
+  sessionTransportSrc: join(
+    root,
+    "apps",
+    "web",
+    "src",
+    "auth",
+    "sessionTransport.ts",
+  ),
+
   packagedExe: join(
     root,
     "apps",
@@ -107,8 +119,27 @@ mustInclude(paths.protocolSrc, "Content-Security-Policy", "CSP");
 mustInclude(paths.apiConfigSrc, "app://accounting-timer", "API CORS canonical origin");
 mustInclude(
   paths.apiConfigSrc,
-  "Explicit deployment config replaces defaults",
+  "replaced entirely when CORS_ORIGINS is set",
   "CORS replace semantics",
+);
+
+console.log("=== A2) Phase 2 body refresh + safeStorage ===");
+mustInclude(paths.secureStoreSrc, "safeStorage.encryptString", "safeStorage encrypt");
+mustInclude(paths.secureStoreSrc, "safeStorage.decryptString", "safeStorage decrypt");
+mustInclude(paths.mainSrc, "desktop:get-refresh-token", "IPC get refresh");
+mustInclude(paths.mainSrc, "desktop:set-refresh-token", "IPC set refresh");
+mustInclude(paths.mainSrc, "desktop:clear-refresh-token", "IPC clear refresh");
+mustInclude(paths.preloadSrc, "setRefreshToken", "preload setRefreshToken");
+mustInclude(paths.preloadSrc, "getRefreshToken", "preload getRefreshToken");
+mustInclude(
+  paths.authRoutesSrc,
+  'origin === "app://accounting-timer"',
+  "body refresh Origin gate",
+);
+mustInclude(
+  paths.sessionTransportSrc,
+  "readDesktopRefreshToken",
+  "web desktop refresh transport",
 );
 
 if (!existsSync(join(paths.webDist, "index.html"))) {

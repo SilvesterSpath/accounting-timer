@@ -48,11 +48,12 @@ Server-side RBAC only. UI may hide controls but never authorizes.
 - Server `refresh_sessions`: hashed token, expiry, family id, revocation, user id
 - Disabled users rejected on every authenticated API request
 
-## Electron (Gate A / early smoke later)
+## Electron (Gate A / Phase 2 smoke)
 
-- Constrained custom protocol `app://` serving Vite `dist` only (Phase 2 smoke)
+- Constrained custom protocol `app://` serving Vite `dist` only
 - `webSecurity: true`; required CSP; contextIsolation; no nodeIntegration; sandbox where supported
-- Phase 0 desktop package is an empty shell only (dev load of web URL acceptable)
+- Packaged Origin `app://accounting-timer` → body refresh + `safeStorage` (see `docs/PHASE2.md`)
+- Unpackaged Vite Electron may still use cookie transport (browser Origin)
 
 ## Stack pins
 

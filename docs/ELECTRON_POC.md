@@ -105,11 +105,11 @@ Completed against fresh package above with API + Postgres running (2026-10-30).
 
 Do **not** check these as passed unless performed.
 
-## Deferred (Phase 1+)
+## Deferred / follow-on
 
-- Authentication / refresh / safeStorage
-- Time entry create/edit
-- Monthly CSV (fixture download only in PoC)
+- Phase 1: authentication, time entry create (done on `feature/phase-1`)
+- Phase 2: packaged login + safeStorage body refresh — see `docs/PHASE2.md`
+- Monthly CSV (fixture download only in PoC / Phase 2)
 
 ## Not in scope
 

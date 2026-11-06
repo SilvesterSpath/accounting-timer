@@ -14,6 +14,10 @@ export interface DesktopBridge {
     fileName: string;
     contents: string;
   }) => Promise<{ ok: true; path: string } | { ok: false; canceled: true }>;
+  isSecureStoreAvailable: () => Promise<boolean>;
+  getRefreshToken: () => Promise<string | null>;
+  setRefreshToken: (token: string) => Promise<{ ok: true }>;
+  clearRefreshToken: () => Promise<{ ok: true }>;
 }
 
 declare global {

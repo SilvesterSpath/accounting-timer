@@ -59,4 +59,4 @@ Integration tests use **only** `TEST_DATABASE_URL` (default `:5433` / `accountin
 
 ## Out of scope (later phases)
 
-Import pipeline, monthly CSV file export, Electron login/safeStorage smoke (Phase 2), signed installers.
+Import pipeline, monthly CSV file export, signed installers. Electron login/safeStorage smoke → `docs/PHASE2.md`.

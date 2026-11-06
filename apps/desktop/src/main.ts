@@ -19,6 +19,12 @@ import {
   resolveRendererLoadUrl,
   shouldAttachAppProtocol,
 } from "./security";
+import {
+  clearRefreshToken,
+  isSecureStoreAvailable,
+  loadRefreshToken,
+  saveRefreshToken,
+} from "./secureStore";
 
 registerAppScheme();
 
@@ -64,7 +70,7 @@ function createWindow(loadUrl: string) {
   });
   mainWindow = win;
 
-  // PoC: deny all external popups/windows. No system-browser handoff.
+  // Deny all external popups/windows. No system-browser handoff in Gate A.
   win.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
 
   win.webContents.on("will-navigate", (event, url) => {
@@ -117,6 +123,34 @@ app.whenReady().then(() => {
   ipcMain.handle("desktop:get-config", (event) => {
     assertTrustedIpc(event);
     return desktopConfig;
+  });
+
+  ipcMain.handle("desktop:secure-store-available", (event) => {
+    assertTrustedIpc(event);
+    return isSecureStoreAvailable();
+  });
+
+  ipcMain.handle("desktop:get-refresh-token", (event) => {
+    assertTrustedIpc(event);
+    return loadRefreshToken();
+  });
+
+  ipcMain.handle(
+    "desktop:set-refresh-token",
+    (event, token: unknown) => {
+      assertTrustedIpc(event);
+      if (typeof token !== "string" || !token) {
+        throw new Error("Invalid refresh token payload");
+      }
+      saveRefreshToken(token);
+      return { ok: true as const };
+    },
+  );
+
+  ipcMain.handle("desktop:clear-refresh-token", (event) => {
+    assertTrustedIpc(event);
+    clearRefreshToken();
+    return { ok: true as const };
   });
 
   ipcMain.handle("desktop:save-fixture", async (event, payload: unknown) => {

@@ -1,8 +1,8 @@
 {
   "name": "@accounting-timer/desktop",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "private": true,
-  "description": "Accounting Timer Electron PoC shell",
+  "description": "Accounting Timer Electron shell (Phase 2)",
   "author": "Accounting Timer",
   "main": "dist/main.js",
   "scripts": {
