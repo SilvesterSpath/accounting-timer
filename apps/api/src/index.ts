@@ -1,9 +1,9 @@
 import { buildApp } from "./app.js";
 import { config } from "./config.js";
 import { pool } from "./db.js";
-import { seedPhase1 } from "./db/seed.js";
+import { applyMigrations } from "./db/migrate.js";
 
-await seedPhase1();
+await applyMigrations();
 
 const app = await buildApp();
 

@@ -8,14 +8,10 @@ import type {
 } from "@accounting-timer/shared-types";
 import { ApiError, apiFetch } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
-
-function todayIso(): string {
-  return new Date().toISOString().slice(0, 10);
-}
-
-function currentMonth(): string {
-  return new Date().toISOString().slice(0, 7);
-}
+import {
+  budapestCalendarDate,
+  budapestCalendarMonth,
+} from "../lib/budapestDate";
 
 export function WorkPage() {
   const { state, logout } = useAuth();
@@ -29,7 +25,7 @@ export function WorkPage() {
 
   const [clientId, setClientId] = useState("");
   const [activityId, setActivityId] = useState("");
-  const [workDate, setWorkDate] = useState(todayIso());
+  const [workDate, setWorkDate] = useState(() => budapestCalendarDate());
   const [durationMinutes, setDurationMinutes] = useState(60);
   const [description, setDescription] = useState("");
 
@@ -45,7 +41,7 @@ export function WorkPage() {
           `/api/v1/reports/summary?workDate=${encodeURIComponent(workDate)}`,
         ),
         apiFetch<SummaryReportDto>(
-          `/api/v1/reports/summary?month=${encodeURIComponent(currentMonth())}`,
+          `/api/v1/reports/summary?month=${encodeURIComponent(budapestCalendarMonth())}`,
         ),
       ]);
     setClients(clientRows);

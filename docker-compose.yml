@@ -17,5 +17,24 @@ services:
       timeout: 5s
       retries: 10
 
+  postgres_test:
+    image: postgres:16-alpine
+    container_name: accounting-timer-postgres-test
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:5433:5432"
+    environment:
+      POSTGRES_USER: accounting
+      POSTGRES_PASSWORD: accounting
+      POSTGRES_DB: accounting_timer_test
+    volumes:
+      - accounting_timer_pgdata_test:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U accounting -d accounting_timer_test"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
 volumes:
   accounting_timer_pgdata:
+  accounting_timer_pgdata_test:

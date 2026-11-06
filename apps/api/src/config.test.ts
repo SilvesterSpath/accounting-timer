@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { DEFAULT_CORS_ORIGINS, parseCorsOrigins } from "./config.js";
+import { DEFAULT_CORS_ORIGINS, parseCorsOrigins, resolveJwtSecret } from "./config.js";
 
 test("default CORS includes canonical app origin exactly once", () => {
   const origins = parseCorsOrigins({});
@@ -25,4 +25,20 @@ test("legacy CORS_ORIGIN replaces defaults", () => {
   assert.deepEqual(parseCorsOrigins({ CORS_ORIGIN: "https://only.example" }), [
     "https://only.example",
   ]);
+});
+
+test("resolveJwtSecret requires JWT_SECRET in production", () => {
+  assert.throws(
+    () => resolveJwtSecret({ NODE_ENV: "production" }),
+    /JWT_SECRET must be set in production/,
+  );
+  assert.equal(
+    resolveJwtSecret({ NODE_ENV: "production", JWT_SECRET: "prod-secret" }),
+    "prod-secret",
+  );
+});
+
+test("resolveJwtSecret allows development fallback when unset", () => {
+  const secret = resolveJwtSecret({ NODE_ENV: "development" });
+  assert.match(secret, /^dev-only/);
 });

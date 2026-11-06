@@ -37,7 +37,9 @@ function sendAuthPayload(
 export async function authRoutes(app: FastifyInstance): Promise<void> {
   app.post("/api/v1/auth/login", async (request, reply) => {
     const body = loginBody.parse(request.body);
-    const result = await loginWithPassword(body.email, body.password);
+    const result = await loginWithPassword(body.email, body.password, {
+      ip: request.ip,
+    });
     return sendAuthPayload(reply, result);
   });
 
@@ -63,6 +65,14 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
   app.post("/api/v1/auth/logout", async (request, reply) => {
     const body = (request.body ?? {}) as { refreshToken?: string };
     const cookieToken = request.cookies[config.cookieName];
+    if (cookieToken && body.refreshToken) {
+      return reply
+        .code(400)
+        .send({ error: "Send cookie or body refresh token, not both" });
+    }
+    if (cookieToken) {
+      assertTrustedOrigin(request);
+    }
     await revokeRefreshToken(cookieToken ?? body.refreshToken);
     clearRefreshCookie(reply);
     return { ok: true };

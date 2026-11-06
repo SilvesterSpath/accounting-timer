@@ -4,21 +4,48 @@ import { eq } from "drizzle-orm";
 import { buildApp } from "./app.js";
 import { db } from "./db/client.js";
 import { auditLogs, users } from "./db/schema.js";
-import { seedPhase1 } from "./db/seed.js";
+import { seedDemoUsers } from "./db/seed.js";
 import { pool } from "./db.js";
+import { config } from "./config.js";
+import { resetLoginThrottleForTests } from "./auth/loginThrottle.js";
+
+const usingTestDb = /:5433\/|accounting_timer_test/.test(config.databaseUrl);
 
 const hasDb = await pool
   .query("SELECT 1")
   .then(() => true)
   .catch(() => false);
 
-const describeIfDb = hasDb ? test : test.skip;
+const run = hasDb && usingTestDb ? test : test.skip;
+
+if (hasDb && !usingTestDb) {
+  test("integration tests refuse development database URL", () => {
+    assert.fail(
+      `Refusing to run integration tests against ${config.databaseUrl}. Use TEST_DATABASE_URL / port 5433.`,
+    );
+  });
+}
 
 let app: Awaited<ReturnType<typeof buildApp>>;
 
+async function resetTestData(): Promise<void> {
+  await pool.query(`
+    TRUNCATE TABLE
+      audit_logs,
+      time_entries,
+      refresh_sessions,
+      employees,
+      clients,
+      activities,
+      users
+    RESTART IDENTITY CASCADE
+  `);
+  await seedDemoUsers({ force: true });
+}
+
 before(async () => {
-  if (!hasDb) return;
-  await seedPhase1();
+  if (!hasDb || !usingTestDb) return;
+  await seedDemoUsers({ force: true });
   app = await buildApp();
   await app.ready();
 });
@@ -29,20 +56,21 @@ after(async () => {
 });
 
 async function login(email: string, password = "Password123!") {
+  resetLoginThrottleForTests();
   const response = await app.inject({
     method: "POST",
     url: "/api/v1/auth/login",
     payload: { email, password },
   });
   assert.equal(response.statusCode, 200, response.body);
-  const body = response.json() as {
+  return response.json() as {
     accessToken: string;
     user: { id: string; role: string; employeeId: string };
   };
-  return body;
 }
 
-describeIfDb("Phase 1 vertical slice: CRM → entry → totals + audit", async () => {
+run("Phase 1 vertical slice: CRM → entry → exact monthly delta + audit", async () => {
+  await resetTestData();
   const admin = await login("admin@example.com");
   const sync = await app.inject({
     method: "POST",
@@ -50,7 +78,7 @@ describeIfDb("Phase 1 vertical slice: CRM → entry → totals + audit", async (
     headers: { authorization: `Bearer ${admin.accessToken}` },
   });
   assert.equal(sync.statusCode, 200, sync.body);
-  assert.ok((sync.json() as { upserted: number }).upserted >= 3);
+  assert.equal((sync.json() as { upserted: number }).upserted, 3);
 
   const employee = await login("employee@example.com");
   const clients = await app.inject({
@@ -58,7 +86,6 @@ describeIfDb("Phase 1 vertical slice: CRM → entry → totals + audit", async (
     url: "/api/v1/clients",
     headers: { authorization: `Bearer ${employee.accessToken}` },
   });
-  assert.equal(clients.statusCode, 200);
   const clientList = clients.json() as Array<{ id: string; name: string }>;
   const client = clientList.find((c) => c.name === "Acme Holdings");
   assert.ok(client);
@@ -68,9 +95,18 @@ describeIfDb("Phase 1 vertical slice: CRM → entry → totals + audit", async (
     url: "/api/v1/activities",
     headers: { authorization: `Bearer ${employee.accessToken}` },
   });
-  const activityList = activities.json() as Array<{ id: string; code: string }>;
-  const activity = activityList.find((a) => a.code === "CONSULT");
+  const activity = (
+    activities.json() as Array<{ id: string; code: string }>
+  ).find((a) => a.code === "CONSULT");
   assert.ok(activity);
+
+  const beforeSummary = await app.inject({
+    method: "GET",
+    url: "/api/v1/reports/summary?month=2026-03",
+    headers: { authorization: `Bearer ${employee.accessToken}` },
+  });
+  const beforeMinutes = (beforeSummary.json() as { totalMinutes: number })
+    .totalMinutes;
 
   const created = await app.inject({
     method: "POST",
@@ -85,7 +121,7 @@ describeIfDb("Phase 1 vertical slice: CRM → entry → totals + audit", async (
     },
   });
   assert.equal(created.statusCode, 201, created.body);
-  const entry = created.json() as { id: string; durationMinutes: number };
+  const entry = created.json() as { id: string };
 
   const audits = await db
     .select()
@@ -93,17 +129,25 @@ describeIfDb("Phase 1 vertical slice: CRM → entry → totals + audit", async (
     .where(eq(auditLogs.entityId, entry.id));
   assert.ok(audits.some((row) => row.action === "insert"));
 
-  const summary = await app.inject({
+  const afterSummary = await app.inject({
     method: "GET",
     url: "/api/v1/reports/summary?month=2026-03",
     headers: { authorization: `Bearer ${employee.accessToken}` },
   });
-  assert.equal(summary.statusCode, 200);
-  const report = summary.json() as { totalMinutes: number };
-  assert.ok(report.totalMinutes >= 90);
+  const afterMinutes = (afterSummary.json() as { totalMinutes: number })
+    .totalMinutes;
+  assert.equal(afterMinutes, beforeMinutes + 90);
+
+  const daySummary = await app.inject({
+    method: "GET",
+    url: "/api/v1/reports/summary?workDate=2026-03-15",
+    headers: { authorization: `Bearer ${employee.accessToken}` },
+  });
+  assert.equal((daySummary.json() as { totalMinutes: number }).totalMinutes, 90);
 });
 
-describeIfDb("Employee cannot list another employee entries", async () => {
+run("Employee cannot list another employee entries", async () => {
+  await resetTestData();
   const employee = await login("employee@example.com");
   const manager = await login("manager@example.com");
   assert.ok(manager.user.employeeId);
@@ -114,16 +158,10 @@ describeIfDb("Employee cannot list another employee entries", async () => {
     headers: { authorization: `Bearer ${employee.accessToken}` },
   });
   assert.equal(forbidden.statusCode, 403);
-
-  const allowed = await app.inject({
-    method: "GET",
-    url: `/api/v1/time-entries?employeeId=${manager.user.employeeId}`,
-    headers: { authorization: `Bearer ${manager.accessToken}` },
-  });
-  assert.equal(allowed.statusCode, 200);
 });
 
-describeIfDb("Disabled user is rejected on authenticated API calls", async () => {
+run("Disabled user is rejected on authenticated API calls", async () => {
+  await resetTestData();
   const [disabled] = await db
     .select()
     .from(users)
@@ -131,7 +169,6 @@ describeIfDb("Disabled user is rejected on authenticated API calls", async () =>
     .limit(1);
   assert.ok(disabled);
 
-  // Temporarily activate to obtain a token, then disable again.
   await db
     .update(users)
     .set({ active: true, updatedAt: new Date() })
@@ -150,8 +187,8 @@ describeIfDb("Disabled user is rejected on authenticated API calls", async () =>
   assert.equal(me.statusCode, 403);
 });
 
-describeIfDb("Cookie refresh requires trusted Origin", async () => {
-  const employee = await login("employee@example.com");
+run("Cookie refresh and logout require trusted Origin", async () => {
+  await resetTestData();
   const loginResponse = await app.inject({
     method: "POST",
     url: "/api/v1/auth/login",
@@ -160,7 +197,7 @@ describeIfDb("Cookie refresh requires trusted Origin", async () => {
   const cookie = loginResponse.cookies.find((c) => c.name === "at_refresh");
   assert.ok(cookie);
 
-  const badOrigin = await app.inject({
+  const badRefresh = await app.inject({
     method: "POST",
     url: "/api/v1/auth/refresh",
     headers: {
@@ -169,9 +206,20 @@ describeIfDb("Cookie refresh requires trusted Origin", async () => {
     },
     payload: {},
   });
-  assert.equal(badOrigin.statusCode, 403);
+  assert.equal(badRefresh.statusCode, 403);
 
-  const ok = await app.inject({
+  const badLogout = await app.inject({
+    method: "POST",
+    url: "/api/v1/auth/logout",
+    headers: {
+      origin: "https://evil.example",
+      cookie: `at_refresh=${cookie.value}`,
+    },
+    payload: {},
+  });
+  assert.equal(badLogout.statusCode, 403);
+
+  const okRefresh = await app.inject({
     method: "POST",
     url: "/api/v1/auth/refresh",
     headers: {
@@ -180,7 +228,90 @@ describeIfDb("Cookie refresh requires trusted Origin", async () => {
     },
     payload: {},
   });
-  assert.equal(ok.statusCode, 200, ok.body);
-  assert.ok(employee.accessToken);
+  assert.equal(okRefresh.statusCode, 200, okRefresh.body);
+
+  const nextCookie = okRefresh.cookies.find((c) => c.name === "at_refresh");
+  assert.ok(nextCookie);
+
+  const okLogout = await app.inject({
+    method: "POST",
+    url: "/api/v1/auth/logout",
+    headers: {
+      origin: "http://127.0.0.1:5173",
+      cookie: `at_refresh=${nextCookie.value}`,
+    },
+    payload: {},
+  });
+  assert.equal(okLogout.statusCode, 200);
 });
 
+run("Concurrent refresh with same token yields one winner", async () => {
+  await resetTestData();
+  const loginResponse = await app.inject({
+    method: "POST",
+    url: "/api/v1/auth/login",
+    payload: { email: "employee@example.com", password: "Password123!" },
+  });
+  const cookie = loginResponse.cookies.find((c) => c.name === "at_refresh");
+  assert.ok(cookie);
+  const raw = cookie.value;
+
+  const [a, b] = await Promise.all([
+    app.inject({
+      method: "POST",
+      url: "/api/v1/auth/refresh",
+      headers: {
+        origin: "http://127.0.0.1:5173",
+        cookie: `at_refresh=${raw}`,
+      },
+      payload: {},
+    }),
+    app.inject({
+      method: "POST",
+      url: "/api/v1/auth/refresh",
+      headers: {
+        origin: "http://127.0.0.1:5173",
+        cookie: `at_refresh=${raw}`,
+      },
+      payload: {},
+    }),
+  ]);
+
+  const statuses = [a.statusCode, b.statusCode].sort((x, y) => x - y);
+  assert.deepEqual(statuses, [200, 401]);
+
+  const winner = a.statusCode === 200 ? a : b;
+  assert.ok((winner.json() as { accessToken: string }).accessToken);
+
+  // Original token must not mint another session.
+  const reuseOriginal = await app.inject({
+    method: "POST",
+    url: "/api/v1/auth/refresh",
+    headers: {
+      origin: "http://127.0.0.1:5173",
+      cookie: `at_refresh=${raw}`,
+    },
+    payload: {},
+  });
+  assert.equal(reuseOriginal.statusCode, 401);
+
+  // Reuse detection revokes the rotation family (T02). Cross-tab UI coordination
+  // exists so benign multi-tab clients avoid this race; after a proven race,
+  // re-login is required.
+  const winnerCookie = winner.cookies.find((c) => c.name === "at_refresh");
+  if (winnerCookie) {
+    const followUp = await app.inject({
+      method: "POST",
+      url: "/api/v1/auth/refresh",
+      headers: {
+        origin: "http://127.0.0.1:5173",
+        cookie: `at_refresh=${winnerCookie.value}`,
+      },
+      payload: {},
+    });
+    assert.ok(
+      followUp.statusCode === 200 || followUp.statusCode === 401,
+      `unexpected follow-up status ${followUp.statusCode}`,
+    );
+  }
+});

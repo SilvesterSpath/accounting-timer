@@ -9,8 +9,9 @@
     "start": "node dist/index.js",
     "db:migrate": "tsx src/db/migrate.ts",
     "db:seed": "tsx src/db/seed.ts",
+    "db:seed:demo": "tsx src/db/seed.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "node --import tsx --test src/**/*.test.ts",
+    "test": "node --import ./src/test/loadTestEnv.ts --import tsx --test src/**/*.test.ts",
     "lint": "node -e \"console.log('lint: api ok (Phase 0 stub)')\""
   },
   "dependencies": {

@@ -28,6 +28,21 @@ export function parseCorsOrigins(
   return [...DEFAULT_CORS_ORIGINS];
 }
 
+const DEV_JWT_FALLBACK = "dev-only-change-me-accounting-timer-gate-a";
+
+export function resolveJwtSecret(
+  env: NodeJS.ProcessEnv = process.env,
+): string {
+  const configured = env.JWT_SECRET?.trim();
+  if (configured) return configured;
+  if (env.NODE_ENV === "production") {
+    throw new Error(
+      "JWT_SECRET must be set in production (no hardcoded fallback)",
+    );
+  }
+  return DEV_JWT_FALLBACK;
+}
+
 export const config = {
   host: envHost(),
   port: Number(process.env.API_PORT ?? "3001"),
@@ -35,12 +50,13 @@ export const config = {
     process.env.DATABASE_URL ??
     "postgresql://accounting:accounting@127.0.0.1:5432/accounting_timer",
   corsOrigins: parseCorsOrigins(),
-  jwtSecret:
-    process.env.JWT_SECRET ?? "dev-only-change-me-accounting-timer-gate-a",
+  jwtSecret: resolveJwtSecret(),
   accessTokenTtl: process.env.ACCESS_TOKEN_TTL ?? "15m",
   refreshTokenDays: Number(process.env.REFRESH_TOKEN_DAYS ?? "14"),
   cookieName: process.env.REFRESH_COOKIE_NAME ?? "at_refresh",
   isProd: process.env.NODE_ENV === "production",
+  loginMaxFailures: Number(process.env.LOGIN_MAX_FAILURES ?? "5"),
+  loginWindowMs: Number(process.env.LOGIN_WINDOW_MS ?? String(15 * 60 * 1000)),
 };
 
 function envHost(): string {

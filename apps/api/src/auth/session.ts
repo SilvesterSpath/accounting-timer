@@ -1,4 +1,4 @@
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import { db } from "../db/client.js";
 import { employees, refreshSessions, users } from "../db/schema.js";
 import { config } from "../config.js";
@@ -10,6 +10,11 @@ import {
   signAccessToken,
   type AccessClaims,
 } from "./tokens.js";
+import {
+  assertLoginAllowed,
+  recordLoginFailure,
+  recordLoginSuccess,
+} from "./loginThrottle.js";
 
 function httpError(statusCode: number, message: string): Error {
   return Object.assign(new Error(message), { statusCode });
@@ -41,20 +46,26 @@ export async function loadAuthUser(userId: string): Promise<AuthUser | null> {
 export async function loginWithPassword(
   email: string,
   password: string,
+  meta: { ip: string } = { ip: "unknown" },
 ): Promise<{
   accessToken: string;
   refreshToken: string;
   user: AuthUser;
 }> {
+  const normalizedEmail = email.trim().toLowerCase();
+  assertLoginAllowed({ ip: meta.ip, email: normalizedEmail });
+
   const [user] = await db
     .select()
     .from(users)
-    .where(eq(users.email, email.trim().toLowerCase()))
+    .where(eq(users.email, normalizedEmail))
     .limit(1);
   if (!user || !(await verifyPassword(password, user.passwordHash))) {
+    recordLoginFailure({ ip: meta.ip, email: normalizedEmail });
     throw httpError(401, "Invalid email or password");
   }
   if (!user.active) {
+    recordLoginFailure({ ip: meta.ip, email: normalizedEmail });
     throw httpError(403, "User is disabled");
   }
 
@@ -62,6 +73,8 @@ export async function loginWithPassword(
   if (!authUser) {
     throw httpError(500, "Failed to load user profile");
   }
+
+  recordLoginSuccess({ ip: meta.ip, email: normalizedEmail });
 
   const refresh = createRefreshTokenValue();
   const expiresAt = new Date(
@@ -83,21 +96,41 @@ export async function loginWithPassword(
   return { accessToken, refreshToken: refresh.token, user: authUser };
 }
 
+/**
+ * Atomically consumes a refresh token inside a transaction.
+ * Concurrent callers with the same token: at most one succeeds;
+ * the loser triggers family revocation (reuse signal).
+ */
 export async function rotateRefreshToken(rawToken: string): Promise<{
   accessToken: string;
   refreshToken: string;
   user: AuthUser;
 }> {
   const tokenHash = hashRefreshToken(rawToken);
-  const [session] = await db
-    .select()
-    .from(refreshSessions)
-    .where(eq(refreshSessions.tokenHash, tokenHash))
-    .limit(1);
+  const next = createRefreshTokenValue();
+  const expiresAt = new Date(
+    Date.now() + config.refreshTokenDays * 24 * 60 * 60 * 1000,
+  );
 
-  if (!session || session.revokedAt || session.expiresAt.getTime() < Date.now()) {
-    if (session) {
-      await db
+  const rotated = await db.transaction(async (tx) => {
+    // Lock candidate row(s) for this hash.
+    await tx.execute(
+      sql`SELECT id FROM refresh_sessions WHERE token_hash = ${tokenHash} FOR UPDATE`,
+    );
+
+    const [session] = await tx
+      .select()
+      .from(refreshSessions)
+      .where(eq(refreshSessions.tokenHash, tokenHash))
+      .limit(1);
+
+    if (!session) {
+      throw httpError(401, "Invalid refresh token");
+    }
+
+    if (session.revokedAt || session.expiresAt.getTime() < Date.now()) {
+      // Reuse / expired: revoke the whole family.
+      await tx
         .update(refreshSessions)
         .set({ revokedAt: new Date() })
         .where(
@@ -106,47 +139,56 @@ export async function rotateRefreshToken(rawToken: string): Promise<{
             isNull(refreshSessions.revokedAt),
           ),
         );
+      throw httpError(401, "Invalid refresh token");
     }
-    throw httpError(401, "Invalid refresh token");
-  }
 
-  const authUser = await loadAuthUser(session.userId);
-  if (!authUser) {
-    throw httpError(401, "Invalid refresh token");
-  }
-  if (!authUser.active) {
-    await db
+    const authUser = await loadAuthUser(session.userId);
+    if (!authUser || !authUser.active) {
+      await tx
+        .update(refreshSessions)
+        .set({ revokedAt: new Date() })
+        .where(eq(refreshSessions.familyId, session.familyId));
+      throw httpError(authUser && !authUser.active ? 403 : 401, 
+        authUser && !authUser.active ? "User is disabled" : "Invalid refresh token");
+    }
+
+    // Atomic consume: only one concurrent updater wins.
+    const consumed = await tx
       .update(refreshSessions)
       .set({ revokedAt: new Date() })
-      .where(eq(refreshSessions.familyId, session.familyId));
-    throw httpError(403, "User is disabled");
-  }
+      .where(
+        and(
+          eq(refreshSessions.id, session.id),
+          isNull(refreshSessions.revokedAt),
+        ),
+      )
+      .returning();
 
-  const next = createRefreshTokenValue();
-  const expiresAt = new Date(
-    Date.now() + config.refreshTokenDays * 24 * 60 * 60 * 1000,
-  );
+    if (!consumed[0]) {
+      await tx
+        .update(refreshSessions)
+        .set({ revokedAt: new Date() })
+        .where(eq(refreshSessions.familyId, session.familyId));
+      throw httpError(401, "Invalid refresh token");
+    }
 
-  await db.transaction(async (tx) => {
-    await tx
-      .update(refreshSessions)
-      .set({ revokedAt: new Date() })
-      .where(eq(refreshSessions.id, session.id));
     await tx.insert(refreshSessions).values({
       userId: session.userId,
       tokenHash: next.tokenHash,
       familyId: session.familyId,
       expiresAt,
     });
+
+    return authUser;
   });
 
   const accessToken = await signAccessToken({
-    sub: authUser.id,
-    role: authUser.role,
-    email: authUser.email,
+    sub: rotated.id,
+    role: rotated.role,
+    email: rotated.email,
   } satisfies AccessClaims);
 
-  return { accessToken, refreshToken: next.token, user: authUser };
+  return { accessToken, refreshToken: next.token, user: rotated };
 }
 
 export async function revokeRefreshToken(rawToken: string | undefined): Promise<void> {

@@ -8,7 +8,7 @@ Mock CRM → select client → create time entry → persist → daily/monthly t
 
 ## Demo users
 
-Password for all: `Password123!`
+Password for all **new** demo users: `Password123!`
 
 | Email | Role |
 |-------|------|
@@ -17,17 +17,29 @@ Password for all: `Password123!`
 | `admin@example.com` | admin (CRM sync) |
 | `disabled@example.com` | employee, inactive |
 
+Demo seeding is **explicit only** (`pnpm db:seed:demo`). API startup applies migrations but does **not** re-seed. Re-running demo seed never overwrites existing users’ password, role, or active flag.
+
 ## Run
 
 ```bash
-pnpm db:up
-pnpm --filter @accounting-timer/api db:seed   # also runs on API start
+pnpm db:up                 # starts app DB :5432 and test DB :5433
+pnpm db:seed:demo          # once, development only
 pnpm dev:api
 pnpm dev:web
 ```
 
 - Sign in: http://localhost:5173/login  
 - Workbench: http://localhost:5173/app  
+
+Workbench day/month defaults use **Europe/Budapest**.
+
+## Security notes (remediation)
+
+- Production requires `JWT_SECRET` (no hardcoded production fallback)
+- Login throttling: per-IP and per-account failure windows
+- Refresh rotation is transactional; concurrent reuse → one winner, family revoke
+- Cookie-based refresh **and** logout require trusted `Origin`
+- Browser tabs coordinate refresh via BroadcastChannel (same-tab in-flight dedupe)
 
 ## Acceptance
 
@@ -38,7 +50,12 @@ pnpm dev:web
 | Audit row on insert | same + `audit_logs` |
 | Disabled user rejected on next API call | same |
 | Duration + month boundary units | `duration.test.ts` |
-| Cookie refresh Origin check | integration test |
+| Budapest UI date defaults | `budapestDate.test.ts` |
+| Cookie Origin on refresh/logout | integration test |
+| Concurrent refresh | integration test |
+| Login throttle | `loginThrottle.test.ts` |
+
+Integration tests use **only** `TEST_DATABASE_URL` (default `:5433` / `accounting_timer_test`), never the development database.
 
 ## Out of scope (later phases)
 

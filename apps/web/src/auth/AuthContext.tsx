@@ -9,6 +9,7 @@ import {
 } from "react";
 import type { AuthUserDto } from "@accounting-timer/shared-types";
 import { apiFetch, setAccessToken } from "../api/client";
+import { coordinatedRefresh } from "./refreshCoordinator";
 
 type AuthState =
   | { status: "loading" }
@@ -28,19 +29,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<AuthState>({ status: "loading" });
 
   const refresh = useCallback(async () => {
-    try {
-      const result = await apiFetch<{
+    const result = await coordinatedRefresh(async () => {
+      return apiFetch<{
         accessToken: string;
         user: AuthUserDto;
       }>("/api/v1/auth/refresh", { method: "POST", body: "{}" });
-      setAccessToken(result.accessToken);
-      setState({ status: "authenticated", user: result.user });
-      return true;
-    } catch {
+    });
+
+    if (!result) {
       setAccessToken(null);
       setState({ status: "anonymous" });
       return false;
     }
+
+    setAccessToken(result.accessToken);
+    setState({
+      status: "authenticated",
+      user: result.user as AuthUserDto,
+    });
+    return true;
   }, []);
 
   useEffect(() => {

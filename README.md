@@ -64,7 +64,7 @@ pnpm dev:desktop
 
 ```bash
 pnpm db:up
-pnpm --filter @accounting-timer/api db:seed
+pnpm db:seed:demo    # explicit; does not run on API start; never overwrites existing users
 pnpm dev
 # http://localhost:5173/login  — employee@example.com / Password123!
 # Admin CRM sync from /app after signing in as admin@example.com

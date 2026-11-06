@@ -10,14 +10,29 @@ import { hashPassword } from "../auth/passwords.js";
 import { applyMigrations } from "./migrate.js";
 import { pool } from "../db.js";
 
-const SEED_PASSWORD = "Password123!";
+export const DEMO_SEED_PASSWORD = "Password123!";
 
-export async function seedPhase1(): Promise<void> {
+/**
+ * Development-only demo seed.
+ * Inserts missing demo users / internal client / activities.
+ * Never overwrites existing users' password, role, or active flag.
+ */
+export async function seedDemoUsers(options: {
+  /** Allow when NODE_ENV=production only if operator set ALLOW_DEMO_SEED=1 or tests pass this. */
+  force?: boolean;
+} = {}): Promise<{ createdUsers: string[] }> {
+  const isProd = process.env.NODE_ENV === "production";
+  if (isProd && process.env.ALLOW_DEMO_SEED !== "1" && !options.force) {
+    throw new Error(
+      "Demo seed is disabled in production without ALLOW_DEMO_SEED=1",
+    );
+  }
+
   await applyMigrations();
+  const passwordHash = await hashPassword(DEMO_SEED_PASSWORD);
+  const createdUsers: string[] = [];
 
-  const passwordHash = await hashPassword(SEED_PASSWORD);
-
-  async function upsertUser(input: {
+  async function insertUserIfMissing(input: {
     email: string;
     role: "employee" | "manager" | "admin";
     active: boolean;
@@ -31,15 +46,7 @@ export async function seedPhase1(): Promise<void> {
     let userId: string;
     if (existing[0]) {
       userId = existing[0].id;
-      await db
-        .update(users)
-        .set({
-          passwordHash,
-          role: input.role,
-          active: input.active,
-          updatedAt: new Date(),
-        })
-        .where(eq(users.id, userId));
+      // Preserve credentials, role, and active status.
     } else {
       const inserted = await db
         .insert(users)
@@ -55,6 +62,7 @@ export async function seedPhase1(): Promise<void> {
         throw new Error(`Failed to create user ${input.email}`);
       }
       userId = created.id;
+      createdUsers.push(input.email);
     }
 
     const emp = await db
@@ -72,25 +80,25 @@ export async function seedPhase1(): Promise<void> {
     }
   }
 
-  await upsertUser({
+  await insertUserIfMissing({
     email: "employee@example.com",
     role: "employee",
     active: true,
     displayName: "Eve Employee",
   });
-  await upsertUser({
+  await insertUserIfMissing({
     email: "manager@example.com",
     role: "manager",
     active: true,
     displayName: "Morgan Manager",
   });
-  await upsertUser({
+  await insertUserIfMissing({
     email: "admin@example.com",
     role: "admin",
     active: true,
     displayName: "Ada Admin",
   });
-  await upsertUser({
+  await insertUserIfMissing({
     email: "disabled@example.com",
     role: "employee",
     active: false,
@@ -126,15 +134,23 @@ export async function seedPhase1(): Promise<void> {
       await db.insert(activities).values(activity);
     }
   }
+
+  return { createdUsers };
 }
 
 if (
   process.argv[1]?.endsWith("seed.ts") ||
   process.argv[1]?.endsWith("seed.js")
 ) {
-  seedPhase1()
-    .then(async () => {
-      console.log("Seed complete. Demo password:", SEED_PASSWORD);
+  seedDemoUsers()
+    .then(async (result) => {
+      console.log(
+        "Demo seed complete.",
+        result.createdUsers.length
+          ? `Created: ${result.createdUsers.join(", ")}`
+          : "No new users (existing rows preserved).",
+      );
+      console.log("Demo password (new users only):", DEMO_SEED_PASSWORD);
       await pool.end();
     })
     .catch(async (error) => {
