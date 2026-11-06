@@ -16,7 +16,6 @@ export function parseCorsOrigins(
 ): string[] {
   const fromList = env.CORS_ORIGINS;
   if (fromList && fromList.trim()) {
-    // Explicit deployment config replaces defaults (does not extend them).
     return fromList
       .split(",")
       .map((value) => value.trim())
@@ -24,7 +23,6 @@ export function parseCorsOrigins(
   }
   const single = env.CORS_ORIGIN;
   if (single && single.trim()) {
-    // Legacy single-origin override also replaces the full default set.
     return [single.trim()];
   }
   return [...DEFAULT_CORS_ORIGINS];
@@ -37,6 +35,12 @@ export const config = {
     process.env.DATABASE_URL ??
     "postgresql://accounting:accounting@127.0.0.1:5432/accounting_timer",
   corsOrigins: parseCorsOrigins(),
+  jwtSecret:
+    process.env.JWT_SECRET ?? "dev-only-change-me-accounting-timer-gate-a",
+  accessTokenTtl: process.env.ACCESS_TOKEN_TTL ?? "15m",
+  refreshTokenDays: Number(process.env.REFRESH_TOKEN_DAYS ?? "14"),
+  cookieName: process.env.REFRESH_COOKIE_NAME ?? "at_refresh",
+  isProd: process.env.NODE_ENV === "production",
 };
 
 function envHost(): string {

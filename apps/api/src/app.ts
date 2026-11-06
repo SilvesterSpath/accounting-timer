@@ -1,11 +1,17 @@
 import Fastify from "fastify";
+import cookie from "@fastify/cookie";
 import type { HealthResponse } from "@accounting-timer/shared-types";
 import { config } from "./config.js";
 import { checkDatabase } from "./db.js";
+import { registerAuth } from "./auth/plugin.js";
+import { authRoutes } from "./routes/auth.js";
+import { domainRoutes } from "./routes/domain.js";
 
 export async function buildApp() {
   const app = Fastify({ logger: true });
   const allowed = new Set(config.corsOrigins);
+
+  await app.register(cookie);
 
   app.addHook("onRequest", async (request, reply) => {
     const origin = request.headers.origin;
@@ -27,8 +33,29 @@ export async function buildApp() {
     }
   });
 
+  app.setErrorHandler((error, _request, reply) => {
+    const statusCode =
+      typeof error === "object" &&
+      error &&
+      "statusCode" in error &&
+      typeof (error as { statusCode?: unknown }).statusCode === "number"
+        ? (error as { statusCode: number }).statusCode
+        : error instanceof Error && error.name === "ZodError"
+          ? 400
+          : 500;
+    const message =
+      error instanceof Error ? error.message : "Internal Server Error";
+    if (statusCode >= 500) {
+      app.log.error(error);
+    }
+    reply.code(statusCode).send({ error: message });
+  });
+
+  await registerAuth(app);
+  await authRoutes(app);
+  await domainRoutes(app);
+
   app.get("/api/v1/health", async (request): Promise<HealthResponse> => {
-    // PoC aid: surface Origin for Electron CORS verification (Finding 5).
     request.log.info(
       { origin: request.headers.origin ?? null },
       "health origin",

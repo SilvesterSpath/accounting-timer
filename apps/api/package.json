@@ -7,19 +7,28 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/index.js",
+    "db:migrate": "tsx src/db/migrate.ts",
+    "db:seed": "tsx src/db/seed.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "node --import tsx --test src/**/*.test.ts",
     "lint": "node -e \"console.log('lint: api ok (Phase 0 stub)')\""
   },
   "dependencies": {
     "@accounting-timer/shared-types": "workspace:*",
+    "@fastify/cookie": "^11.1.5",
+    "bcryptjs": "^3.0.3",
     "dotenv": "^17.2.2",
+    "drizzle-orm": "^0.45.4",
     "fastify": "^5.6.0",
-    "pg": "^8.16.3"
+    "jose": "^6.2.15",
+    "pg": "^8.16.3",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
+    "@types/bcryptjs": "^3.0.0",
     "@types/node": "^24.5.2",
     "@types/pg": "^8.15.5",
+    "drizzle-kit": "^0.31.11",
     "tsx": "^4.20.5",
     "typescript": "^5.9.2"
   }

@@ -67,16 +67,22 @@ export function HomePage() {
         Accounting Timer
       </p>
       <h1 className="text-4xl font-semibold tracking-tight text-slate-900">
-        Phase 0.5 Electron feasibility
+        Phase 1 vertical slice
       </h1>
       <p className="max-w-2xl text-lg leading-relaxed text-slate-700">
-        Same React build for browser and Electron. Auth and accounting domain
-        features remain deferred to Phase 1.
+        Mock CRM, time entries, and daily/monthly totals behind same-origin auth.
+        Sign in to use the workbench.
       </p>
 
       <nav className="flex gap-4 text-sm">
         <Link className="text-sky-800 underline" to="/">
           Home
+        </Link>
+        <Link className="text-sky-800 underline" to="/login">
+          Sign in
+        </Link>
+        <Link className="text-sky-800 underline" to="/app">
+          Workbench
         </Link>
         <Link className="text-sky-800 underline" to="/smoke">
           Routing smoke

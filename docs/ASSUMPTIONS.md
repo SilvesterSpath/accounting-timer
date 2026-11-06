@@ -58,7 +58,7 @@ Server-side RBAC only. UI may hide controls but never authorizes.
 
 - Node.js **24 LTS** (`engines`, `.nvmrc`, CI)
 - React + TypeScript + Vite + Tailwind (one UI)
-- Node/TS REST API (Fastify), PostgreSQL + Drizzle (schema in later phases)
+- Node/TS REST API (Fastify), PostgreSQL + Drizzle (Phase 1 schema live)
 - Docker Compose for Postgres only
 - pnpm workspaces; `packages/shared-types` only for now
 

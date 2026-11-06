@@ -5,6 +5,7 @@ Gate A **practice prototype** (fictional data). See:
 - [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md) — full plan
 - [docs/ASSUMPTIONS.md](docs/ASSUMPTIONS.md) — Phase 0 prototype assumptions
 - [docs/ELECTRON_POC.md](docs/ELECTRON_POC.md) — Phase 0.5 Electron feasibility (`experiment/electron-poc`)
+- [docs/PHASE1.md](docs/PHASE1.md) — Phase 1 vertical slice (`feature/phase-1`)
 
 ## Prerequisites
 
@@ -59,6 +60,16 @@ pnpm dev:desktop
 ```
 
 
+## Phase 1 (vertical slice)
+
+```bash
+pnpm db:up
+pnpm --filter @accounting-timer/api db:seed
+pnpm dev
+# http://localhost:5173/login  — employee@example.com / Password123!
+# Admin CRM sync from /app after signing in as admin@example.com
+```
+
 ## Scope note
 
-Phase 0 / 0.5 are scaffold + delivery-shell proof only. Do not load real employee/client data. Phase 1+ requires separate approval.
+Gate A uses fictional/synthetic data only. Do not load real employee/client data.

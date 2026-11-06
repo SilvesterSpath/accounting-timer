@@ -23,6 +23,7 @@
     "db:up": "docker compose up -d",
     "db:down": "docker compose down",
     "db:ps": "docker compose ps",
+    "db:seed": "pnpm --filter @accounting-timer/api db:seed",
     "verify:phase0": "node scripts/verify-phase0.mjs",
     "verify:electron-poc": "node scripts/verify-electron-poc.mjs",
     "verify:electron-poc:package": "node scripts/verify-electron-poc.mjs --package",
